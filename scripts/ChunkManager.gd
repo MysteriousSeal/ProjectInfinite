@@ -28,12 +28,18 @@ const TREE_SCENE := preload("res://scenes/Tree.tscn")
 # standing side by side. Either way the block is covered edge to edge, so the
 # mix varies the canopy without opening gaps or overlapping.
 const SMALL_TREE_SCENE := preload("res://scenes/SmallTree.tscn")
+
 # A canopy covers two tiles each way, so trees are anchored on even
 # coordinates: one per two-by-two block. They tile edge to edge instead of
 # piling on each other, and because each blocks its whole block, neighbouring
 # trees join into an unbroken wall.
 const TREE_TILES := 2
 const TREE_PX := TREE_TILES * TILE_PX
+
+# Boulders are single-tile obstacles scattered over open ground. One in fifty
+# grass tiles works out to roughly one every seven tiles in each direction.
+const BOULDER_SCENE := preload("res://scenes/Boulder.tscn")
+const BOULDER_RARITY := 50
 
 # Edge tiles let a terrain intrude into the one below it with a shaped border
 # instead of stopping on a grid line. Pair index is the lower terrain, so pair
@@ -68,8 +74,8 @@ const SPAWN_CLEARANCE := 2
 var player: Node2D
 var loaded_chunks: Dictionary = {}
 var lakes: Dictionary = {}
-var tree_parent: Node2D
-var chunk_trees: Dictionary = {}
+var object_parent: Node2D
+var chunk_objects: Dictionary = {}
 var atlas_offsets: Array[int] = []
 var atlas_count := 0
 var edge_offset := 0
@@ -143,9 +149,9 @@ func _make_tile_solid(atlas: TileSetAtlasSource, tile_id: int) -> void:
 func follow(target: Node2D) -> void:
 	player = target
 
-# Trees live outside this node so they can sort against the player by depth.
-func set_tree_parent(target: Node2D) -> void:
-	tree_parent = target
+# Objects live outside this node so they can sort against the player by depth.
+func set_object_parent(target: Node2D) -> void:
+	object_parent = target
 
 func _process(_delta: float) -> void:
 	if player and is_instance_valid(player):
@@ -173,33 +179,49 @@ func _generate_chunk(chunk: Vector2i) -> void:
 			var wy := chunk.y * CHUNK_SIZE + ly
 			tilemap.set_cell(0, Vector2i(wx, wy), 0, Vector2i(_atlas_tile(wx, wy), 0))
 	loaded_chunks[chunk] = true
-	_spawn_trees(chunk)
+	_spawn_objects(chunk)
 
-func _spawn_trees(chunk: Vector2i) -> void:
-	if tree_parent == null:
+func _spawn_objects(chunk: Vector2i) -> void:
+	if object_parent == null:
 		return
-	var trees: Array[Node] = []
+	var objects: Array[Node] = []
 	for ly in range(CHUNK_SIZE):
 		for lx in range(CHUNK_SIZE):
 			var wx := chunk.x * CHUNK_SIZE + lx
 			var wy := chunk.y * CHUNK_SIZE + ly
-			if not _has_tree(wx, wy):
-				continue
-			# Anchored at the foot of the block, which is what depth sorting
-			# compares, with the canopy filling the block above.
-			var foot := wy * TILE_PX + TREE_PX
-			if absi(hash(Vector3i(wx, wy, world_seed + 13))) % 2 == 0:
-				trees.append(_add_tree(TREE_SCENE, Vector2(wx * TILE_PX + TREE_PX / 2.0, foot)))
-			else:
-				trees.append(_add_tree(SMALL_TREE_SCENE, Vector2(wx * TILE_PX + TILE_PX * 0.5, foot)))
-				trees.append(_add_tree(SMALL_TREE_SCENE, Vector2(wx * TILE_PX + TILE_PX * 1.5, foot)))
-	chunk_trees[chunk] = trees
+			if _has_tree(wx, wy):
+				# Anchored at the foot of the block, which is what depth
+				# sorting compares, with the canopy filling the block above.
+				var foot := wy * TILE_PX + TREE_PX
+				if absi(hash(Vector3i(wx, wy, world_seed + 13))) % 2 == 0:
+					objects.append(_add_object(TREE_SCENE, Vector2(wx * TILE_PX + TREE_PX / 2.0, foot)))
+				else:
+					objects.append(_add_object(SMALL_TREE_SCENE, Vector2(wx * TILE_PX + TILE_PX * 0.5, foot)))
+					objects.append(_add_object(SMALL_TREE_SCENE, Vector2(wx * TILE_PX + TILE_PX * 1.5, foot)))
+			elif _has_boulder(wx, wy):
+				objects.append(_add_object(BOULDER_SCENE,
+					Vector2(wx * TILE_PX + TILE_PX * 0.5, wy * TILE_PX + TILE_PX)))
+	chunk_objects[chunk] = objects
 
-func _add_tree(scene: PackedScene, at: Vector2) -> Node:
-	var tree := scene.instantiate()
-	tree.position = at
-	tree_parent.add_child(tree)
-	return tree
+func _has_boulder(wx: int, wy: int) -> bool:
+	if absi(wx) <= SPAWN_CLEARANCE and absi(wy) <= SPAWN_CLEARANCE:
+		return false
+	if _terrain_at(wx, wy) != GRASS:
+		return false
+	# A cell inside a tree block is not the block's anchor, so coverage has to
+	# be tested rather than relying on the anchor check above.
+	if _tree_covers(wx, wy):
+		return false
+	return absi(hash(Vector3i(wx, wy, world_seed + 29))) % BOULDER_RARITY == 0
+
+func _tree_covers(wx: int, wy: int) -> bool:
+	return _has_tree(wx - posmod(wx, TREE_TILES), wy - posmod(wy, TREE_TILES))
+
+func _add_object(scene: PackedScene, at: Vector2) -> Node:
+	var obj := scene.instantiate()
+	obj.position = at
+	object_parent.add_child(obj)
+	return obj
 
 # The variant is derived from the position so a chunk looks the same every
 # time it is streamed back in, rather than reshuffling on every visit.
@@ -314,6 +336,6 @@ func _unload_chunk(chunk: Vector2i) -> void:
 			var wy := chunk.y * CHUNK_SIZE + ly
 			tilemap.erase_cell(0, Vector2i(wx, wy))
 	loaded_chunks.erase(chunk)
-	for tree: Node in chunk_trees.get(chunk, []):
-		tree.queue_free()
-	chunk_trees.erase(chunk)
+	for obj: Node in chunk_objects.get(chunk, []):
+		obj.queue_free()
+	chunk_objects.erase(chunk)

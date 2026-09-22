@@ -16,7 +16,7 @@ func _ready() -> void:
 	# player passes behind a tree standing below them and in front of one above.
 	entities.add_child(player)
 	chunk_manager.follow(player)
-	chunk_manager.set_tree_parent(entities)
+	chunk_manager.set_object_parent(entities)
 	hud.bind(player)
 	character_sheet.bind(player)
 	for i in ENEMY_COUNT:
