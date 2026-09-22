@@ -41,6 +41,28 @@ const TREE_PX := TREE_TILES * TILE_PX
 const BOULDER_SCENE := preload("res://scenes/Boulder.tscn")
 const BOULDER_RARITY := 50
 
+# A village is a ring of houses around an open plaza. Villages sit on their own
+# region grid like lakes, except the region holding the origin always places
+# one there, so the player starts in a plaza rather than in open country.
+const HOUSE_SCENE := preload("res://scenes/House.tscn")
+const HOUSE_TEXTURES := [
+	preload("res://assets/objects/house_1.png"),
+	preload("res://assets/objects/house_2.png"),
+]
+const HOUSE_TILES := 3
+const HOUSE_PX := HOUSE_TILES * TILE_PX
+
+const VILLAGE_REGION := 96
+const VILLAGE_CHANCE := 0.45
+# Ground forced to plain grass around the centre. Comfortably wider than the
+# house ring so no lake or wood ever reaches a doorstep.
+const VILLAGE_CLEAR := 16
+# At eight tiles a diagonal house still clears the plaza; any tighter and the
+# corner houses crowd the spawn point.
+const VILLAGE_RING := 8
+const VILLAGE_HOUSES_MIN := 4
+const VILLAGE_HOUSES_MAX := 6
+
 # Edge tiles let a terrain intrude into the one below it with a shaped border
 # instead of stopping on a grid line. Pair index is the lower terrain, so pair
 # 0 is water bordered by sand and pair 1 is sand bordered by grass.
@@ -76,6 +98,8 @@ var loaded_chunks: Dictionary = {}
 var lakes: Dictionary = {}
 var object_parent: Node2D
 var chunk_objects: Dictionary = {}
+var villages: Dictionary = {}
+var village_houses: Dictionary = {}
 var atlas_offsets: Array[int] = []
 var atlas_count := 0
 var edge_offset := 0
@@ -189,7 +213,11 @@ func _spawn_objects(chunk: Vector2i) -> void:
 		for lx in range(CHUNK_SIZE):
 			var wx := chunk.x * CHUNK_SIZE + lx
 			var wy := chunk.y * CHUNK_SIZE + ly
-			if _has_tree(wx, wy):
+			var house := _house_at(wx, wy)
+			if house >= 0:
+				objects.append(_add_house(house, Vector2(
+					wx * TILE_PX + HOUSE_PX / 2.0, wy * TILE_PX + HOUSE_PX)))
+			elif _has_tree(wx, wy):
 				# Anchored at the foot of the block, which is what depth
 				# sorting compares, with the canopy filling the block above.
 				var foot := wy * TILE_PX + TREE_PX
@@ -212,10 +240,82 @@ func _has_boulder(wx: int, wy: int) -> bool:
 	# be tested rather than relying on the anchor check above.
 	if _tree_covers(wx, wy):
 		return false
+	if _in_village(wx, wy):
+		return false
 	return absi(hash(Vector3i(wx, wy, world_seed + 29))) % BOULDER_RARITY == 0
 
 func _tree_covers(wx: int, wy: int) -> bool:
 	return _has_tree(wx - posmod(wx, TREE_TILES), wy - posmod(wy, TREE_TILES))
+
+# Regions are centred on their coordinate rather than starting at it, which
+# puts the origin at the middle of region zero. The spawn village can then be
+# pinned there and still respect the spacing every other village follows.
+func _village_region(w: int) -> int:
+	return floori((w + VILLAGE_REGION / 2.0) / VILLAGE_REGION)
+
+# Centre of the region's village as (x, y, present); z of 0 means none.
+func _village_for_region(rx: int, ry: int) -> Vector3i:
+	var key := Vector2i(rx, ry)
+	if villages.has(key):
+		return villages[key]
+	var result := Vector3i.ZERO
+	if rx == 0 and ry == 0:
+		result = Vector3i(0, 0, 1)
+	else:
+		var rng := RandomNumberGenerator.new()
+		rng.seed = hash(Vector3i(rx, ry, world_seed + 101))
+		if rng.randf() < VILLAGE_CHANCE:
+			# Held well inside the region so two neighbouring villages can
+			# never bring their cleared ground into contact.
+			var reach := VILLAGE_REGION / 2 - VILLAGE_CLEAR - HOUSE_TILES
+			result = Vector3i(
+				rx * VILLAGE_REGION + rng.randi_range(-reach, reach),
+				ry * VILLAGE_REGION + rng.randi_range(-reach, reach),
+				1)
+	villages[key] = result
+	return result
+
+# Top-left tile of each house in the region's village, spaced around the ring.
+func _village_house_anchors(rx: int, ry: int) -> Array:
+	var key := Vector2i(rx, ry)
+	if village_houses.has(key):
+		return village_houses[key]
+	var anchors := []
+	var village := _village_for_region(rx, ry)
+	if village.z != 0:
+		var rng := RandomNumberGenerator.new()
+		rng.seed = hash(Vector3i(rx, ry, world_seed + 211))
+		var count := rng.randi_range(VILLAGE_HOUSES_MIN, VILLAGE_HOUSES_MAX)
+		var start := rng.randf() * TAU
+		for i in count:
+			var angle := start + TAU * i / count
+			anchors.append(Vector2i(
+				village.x + roundi(cos(angle) * VILLAGE_RING) - HOUSE_TILES / 2,
+				village.y + roundi(sin(angle) * VILLAGE_RING) - HOUSE_TILES / 2))
+	village_houses[key] = anchors
+	return anchors
+
+# Only the tile's own region needs checking: a village sits at most
+# VILLAGE_REGION / 2 - VILLAGE_CLEAR - HOUSE_TILES from its region centre, so
+# neither its cleared ground nor its houses can ever reach into a neighbour.
+func _in_village(wx: int, wy: int, margin := 0) -> bool:
+	var village := _village_for_region(_village_region(wx), _village_region(wy))
+	if village.z == 0:
+		return false
+	var reach := VILLAGE_CLEAR + margin
+	return absi(wx - village.x) <= reach and absi(wy - village.y) <= reach
+
+# Texture index for a house anchored on this tile, or -1 when there is none.
+func _house_at(wx: int, wy: int) -> int:
+	for anchor: Vector2i in _village_house_anchors(_village_region(wx), _village_region(wy)):
+		if anchor.x == wx and anchor.y == wy:
+			return absi(hash(Vector3i(wx, wy, world_seed + 307))) % HOUSE_TEXTURES.size()
+	return -1
+
+func _add_house(texture_index: int, at: Vector2) -> Node:
+	var house := _add_object(HOUSE_SCENE, at)
+	house.get_node("Sprite").texture = HOUSE_TEXTURES[texture_index]
+	return house
 
 func _add_object(scene: PackedScene, at: Vector2) -> Node:
 	var obj := scene.instantiate()
@@ -297,12 +397,18 @@ func _is_forest(wx: int, wy: int) -> bool:
 func _is_forest_candidate(wx: int, wy: int) -> bool:
 	if absi(wx) <= SPAWN_CLEARANCE and absi(wy) <= SPAWN_CLEARANCE:
 		return false
+	if _in_village(wx, wy):
+		return false
 	if forest_noise.get_noise_2d(wx, wy) < FOREST_LEVEL:
 		return false
 	return clearing_noise.get_noise_2d(wx, wy) > CLEARING_LEVEL
 
 func _is_water(wx: int, wy: int) -> bool:
 	if absi(wx) <= SPAWN_CLEARANCE and absi(wy) <= SPAWN_CLEARANCE:
+		return false
+	# Suppressed a tile wider than the cleared ground, so no lake just outside
+	# leaves a shoreline creeping into the village.
+	if _in_village(wx, wy, 1):
 		return false
 	var lake := _lake_for_region(floori(float(wx) / LAKE_REGION), floori(float(wy) / LAKE_REGION))
 	if lake.z == 0.0:
