@@ -15,18 +15,8 @@ const HEALTH_PER_ENDURANCE := 10
 const SPEED_PER_DEXTERITY := 4.0
 const COOLDOWN_PER_DEXTERITY := 0.01
 
-# The sprite stands two tiles tall while the body occupies one, so it is
-# lifted until the feet sit on the bottom edge of the collision box.
-const SPRITE_LIFT := -9
-const DIRECTIONS := ["south", "east", "north", "west"]
-const WALK_FRAMES := 4
-const ATTACK_FRAMES := 6
-const WALK_FPS := 8.0
-const MOVING_SPEED := 1.0
-
 @onready var health: Health = $Health
 @onready var hitbox: Area2D = $Hitbox
-@onready var sprite: AnimatedSprite2D = $Sprite
 
 var facing := Vector2.DOWN
 var attacking := false
@@ -53,9 +43,6 @@ signal stats_changed
 
 func _ready() -> void:
 	add_to_group("player")
-	sprite.sprite_frames = _build_sprite_frames()
-	sprite.offset = Vector2(0, SPRITE_LIFT)
-	_update_animation()
 	hitbox.monitoring = false
 	hitbox.body_entered.connect(_on_hitbox_body_entered)
 	health.died.connect(_on_died)
@@ -71,7 +58,7 @@ func _physics_process(delta: float) -> void:
 		if _poll_attack_pressed() and cooldown_timer <= 0.0:
 			_start_attack()
 	move_and_slide()
-	_update_animation()
+	queue_redraw()
 
 func _handle_movement() -> void:
 	var dir := _get_input_dir()
@@ -123,10 +110,6 @@ func _start_attack() -> void:
 	cooldown_timer = attack_cooldown()
 	hitbox.position = facing * HITBOX_OFFSET
 	hitbox.monitoring = true
-	# Restarted explicitly: repeat swings in the same direction keep the same
-	# clip name, so nothing would retrigger it.
-	sprite.play("attack_" + _facing_name())
-	sprite.frame = 0
 
 func _tick_timers(delta: float) -> void:
 	if cooldown_timer > 0.0:
@@ -186,39 +169,6 @@ func _on_died() -> void:
 
 # Movement is free 8-directional but the art is drawn for four, so a diagonal
 # resolves to whichever cardinal it leans towards.
-func _facing_name() -> String:
-	if absf(facing.x) > absf(facing.y):
-		return "east" if facing.x > 0.0 else "west"
-	return "south" if facing.y > 0.0 else "north"
-
-func _update_animation() -> void:
-	var clip := "idle_"
-	if attacking:
-		clip = "attack_"
-	elif velocity.length() > MOVING_SPEED:
-		clip = "walk_"
-	var wanted := clip + _facing_name()
-	if sprite.animation != wanted:
-		sprite.play(wanted)
-
-func _build_sprite_frames() -> SpriteFrames:
-	var frames := SpriteFrames.new()
-	frames.remove_animation("default")
-	for direction: String in DIRECTIONS:
-		var idle := "idle_" + direction
-		frames.add_animation(idle)
-		frames.add_frame(idle, load("res://assets/hero/hero_%s.png" % direction))
-		var walk := "walk_" + direction
-		frames.add_animation(walk)
-		frames.set_animation_speed(walk, WALK_FPS)
-		for i in WALK_FRAMES:
-			frames.add_frame(walk, load("res://assets/hero/walk/%s_%d.png" % [direction, i]))
-		# Paced to finish inside the attack window so the swing matches the
-		# span when the hitbox is actually live.
-		var attack := "attack_" + direction
-		frames.add_animation(attack)
-		frames.set_animation_loop(attack, false)
-		frames.set_animation_speed(attack, ATTACK_FRAMES / ATTACK_DURATION)
-		for i in ATTACK_FRAMES:
-			frames.add_frame(attack, load("res://assets/hero/attack/%s_%d.png" % [direction, i]))
-	return frames
+func _draw() -> void:
+	draw_rect(Rect2(-6, -8, 12, 16), Color(0.2, 0.6, 1.0))
+	draw_line(Vector2.ZERO, facing * 10.0, Color(1, 1, 0), 2.0)
