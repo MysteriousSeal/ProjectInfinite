@@ -77,6 +77,13 @@ func _get_input_dir() -> Vector2:
 		dir.y -= 1
 	if Input.is_physical_key_pressed(KEY_S) or Input.is_physical_key_pressed(KEY_DOWN):
 		dir.y += 1
+	if dir.x != 0.0 and dir.y != 0.0:
+		# Holding two directions keeps whichever axis is already being
+		# travelled, so cornering does not judder between the two.
+		if absf(facing.y) > absf(facing.x):
+			dir.x = 0.0
+		else:
+			dir.y = 0.0
 	return dir
 
 func _poll_attack_pressed() -> bool:
