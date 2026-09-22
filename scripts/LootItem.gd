@@ -21,7 +21,3 @@ func _on_body_exited(body: Node) -> void:
 func open() -> int:
 	queue_free.call_deferred()
 	return gold
-
-func _draw() -> void:
-	draw_circle(Vector2(0, 2), 5.0, Color(0.55, 0.36, 0.17))
-	draw_rect(Rect2(-2.0, -5.0, 4.0, 4.0), Color(0.33, 0.21, 0.10))
