@@ -24,9 +24,12 @@ const TILE_PATH := "res://assets/tiles/%s/%s_%02d.png"
 # Trees are objects standing on the grass rather than a terrain, so they carry
 # their own collision and can be drawn in front of or behind the player.
 const TREE_SCENE := preload("res://scenes/Tree.tscn")
-# Canopies are two tiles wide, so only a share of forest cells gets one;
-# otherwise they would pile on top of each other into a solid smear.
-const TREE_SPACING := 3
+# A canopy covers two tiles each way, so trees are anchored on even
+# coordinates: one per two-by-two block. They tile edge to edge instead of
+# piling on each other, and because each blocks its whole block, neighbouring
+# trees join into an unbroken wall.
+const TREE_TILES := 2
+const TREE_PX := TREE_TILES * TILE_PX
 
 # Edge tiles let a terrain intrude into the one below it with a shaped border
 # instead of stopping on a grid line. Pair index is the lower terrain, so pair
@@ -179,8 +182,9 @@ func _spawn_trees(chunk: Vector2i) -> void:
 			if not _has_tree(wx, wy):
 				continue
 			var tree := TREE_SCENE.instantiate()
-			# Anchored at the trunk foot, which is what depth sorting compares.
-			tree.position = Vector2(wx * TILE_PX + TILE_PX / 2.0, wy * TILE_PX + TILE_PX)
+			# Anchored at the foot of its block, which is what depth sorting
+			# compares, with the canopy filling the block above.
+			tree.position = Vector2(wx * TILE_PX + TREE_PX / 2.0, wy * TILE_PX + TREE_PX)
 			tree_parent.add_child(tree)
 			trees.append(tree)
 	chunk_trees[chunk] = trees
@@ -236,9 +240,9 @@ func _terrain_at(vx: int, vy: int) -> int:
 # Forest cells still come from the noise, but now decide where a tree object
 # stands rather than which tile gets painted.
 func _has_tree(wx: int, wy: int) -> bool:
-	if not _is_forest(wx, wy):
+	if wx % TREE_TILES != 0 or wy % TREE_TILES != 0:
 		return false
-	return absi(hash(Vector3i(wx, wy, world_seed + 7))) % TREE_SPACING == 0
+	return _is_forest(wx, wy)
 
 # A lone tree in open grass reads as debris rather than woodland, so a tile
 # only keeps its tree if it has at least one orthogonal neighbour tree.
