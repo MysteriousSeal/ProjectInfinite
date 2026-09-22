@@ -9,6 +9,14 @@ const GRASS_TILE := 0
 const WATER_TILE := 1
 const SAND_TILE := 2
 
+# One lake candidate per region. Centers are kept far enough from the region
+# edge that a lake always fits inside it, so lakes never merge into rivers.
+const LAKE_REGION := 24
+const LAKE_CHANCE := 0.6
+const LAKE_RADIUS_MIN := 3.0
+const LAKE_RADIUS_MAX := 7.0
+const SHORE_WOBBLE := 1.5
+
 # Keeps the player's spawn area walkable so a random seed can't trap them in water.
 const SPAWN_CLEARANCE := 2
 
@@ -16,11 +24,14 @@ const SPAWN_CLEARANCE := 2
 
 var player: Node2D
 var loaded_chunks: Dictionary = {}
+var lakes: Dictionary = {}
 var noise := FastNoiseLite.new()
+var world_seed := 0
 
 func _ready() -> void:
-	noise.seed = randi()
-	noise.frequency = 0.05
+	world_seed = randi()
+	noise.seed = world_seed
+	noise.frequency = 0.2
 	_build_tileset()
 
 func _build_tileset() -> void:
@@ -76,16 +87,45 @@ func _generate_chunk(chunk: Vector2i) -> void:
 		for lx in range(CHUNK_SIZE):
 			var wx := chunk.x * CHUNK_SIZE + lx
 			var wy := chunk.y * CHUNK_SIZE + ly
-			var n := noise.get_noise_2d(wx, wy)
-			var tile_id := GRASS_TILE
-			if n < -0.3:
-				tile_id = WATER_TILE
-			elif n < -0.15:
-				tile_id = SAND_TILE
-			if absi(wx) <= SPAWN_CLEARANCE and absi(wy) <= SPAWN_CLEARANCE:
-				tile_id = GRASS_TILE
-			tilemap.set_cell(0, Vector2i(wx, wy), 0, Vector2i(tile_id, 0))
+			tilemap.set_cell(0, Vector2i(wx, wy), 0, Vector2i(_tile_at(wx, wy), 0))
 	loaded_chunks[chunk] = true
+
+func _tile_at(wx: int, wy: int) -> int:
+	if _is_water(wx, wy):
+		return WATER_TILE
+	for oy in range(-1, 2):
+		for ox in range(-1, 2):
+			if _is_water(wx + ox, wy + oy):
+				return SAND_TILE
+	return GRASS_TILE
+
+func _is_water(wx: int, wy: int) -> bool:
+	if absi(wx) <= SPAWN_CLEARANCE and absi(wy) <= SPAWN_CLEARANCE:
+		return false
+	var lake := _lake_for_region(floori(float(wx) / LAKE_REGION), floori(float(wy) / LAKE_REGION))
+	if lake.z == 0.0:
+		return false
+	var dist := Vector2(wx, wy).distance_to(Vector2(lake.x, lake.y))
+	return dist + noise.get_noise_2d(wx, wy) * SHORE_WOBBLE < lake.z
+
+# Returns (center_x, center_y, radius) for the region's lake; radius 0 means none.
+func _lake_for_region(rx: int, ry: int) -> Vector3:
+	var key := Vector2i(rx, ry)
+	if lakes.has(key):
+		return lakes[key]
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(Vector3i(rx, ry, world_seed))
+	var lake := Vector3.ZERO
+	if rng.randf() < LAKE_CHANCE:
+		var radius := rng.randf_range(LAKE_RADIUS_MIN, LAKE_RADIUS_MAX)
+		var margin := radius + SHORE_WOBBLE + 1.0
+		lake = Vector3(
+			rx * LAKE_REGION + rng.randf_range(margin, LAKE_REGION - margin),
+			ry * LAKE_REGION + rng.randf_range(margin, LAKE_REGION - margin),
+			radius
+		)
+	lakes[key] = lake
+	return lake
 
 func _unload_chunk(chunk: Vector2i) -> void:
 	for ly in range(CHUNK_SIZE):
