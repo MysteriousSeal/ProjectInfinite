@@ -5,6 +5,8 @@ const ATTACK_DURATION := 0.18
 const ATTACK_COOLDOWN := 0.3
 const ATTACK_DAMAGE := 10
 const HITBOX_OFFSET := 12.0
+const XP_FOR_FIRST_LEVEL := 20
+const HEALTH_PER_LEVEL := 10
 
 @onready var health: Health = $Health
 @onready var hitbox: Area2D = $Hitbox
@@ -14,10 +16,15 @@ var attacking := false
 var attack_timer := 0.0
 var cooldown_timer := 0.0
 var loot_count := 0
+var xp := 0
+var level := 1
+var xp_to_next := XP_FOR_FIRST_LEVEL
 var _attack_key_was_down := false
 
 signal died
 signal loot_changed(count: int)
+signal xp_changed(xp: int, xp_to_next: int)
+signal leveled_up(level: int)
 
 func _ready() -> void:
 	add_to_group("player")
@@ -87,6 +94,16 @@ func take_hit(amount: int, _from_dir: Vector2) -> void:
 func add_loot(amount: int) -> void:
 	loot_count += amount
 	loot_changed.emit(loot_count)
+
+func add_xp(amount: int) -> void:
+	xp += amount
+	while xp >= xp_to_next:
+		xp -= xp_to_next
+		level += 1
+		xp_to_next = XP_FOR_FIRST_LEVEL * level
+		health.increase_max(HEALTH_PER_LEVEL)
+		leveled_up.emit(level)
+	xp_changed.emit(xp, xp_to_next)
 
 func _on_died() -> void:
 	died.emit()

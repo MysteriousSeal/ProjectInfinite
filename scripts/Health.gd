@@ -20,3 +20,7 @@ func take_damage(amount: int) -> void:
 
 func heal(amount: int) -> void:
 	current = min(current + amount, max_health)
+
+func increase_max(amount: int) -> void:
+	max_health += amount
+	current += amount
