@@ -5,7 +5,6 @@ const DETECT_RADIUS := 90.0
 const CONTACT_DAMAGE := 5
 const CONTACT_COOLDOWN := 0.6
 const XP_REWARD := 7
-const DROP_CHANCE := 0.5
 
 const LootItemScene := preload("res://scenes/LootItem.tscn")
 
@@ -73,10 +72,9 @@ func _on_contact_body_entered(body: Node) -> void:
 func _on_died() -> void:
 	if player and is_instance_valid(player):
 		player.add_xp(XP_REWARD)
-	if randf() < DROP_CHANCE:
-		var loot := LootItemScene.instantiate()
-		loot.global_position = global_position
-		get_parent().add_child(loot)
+	var loot := LootItemScene.instantiate()
+	loot.global_position = global_position
+	get_parent().add_child(loot)
 	queue_free.call_deferred()
 
 func _facing_name() -> String:
