@@ -74,6 +74,16 @@ const EDGE_KINDS := [
 ]
 const EDGE_PATH := "res://assets/tiles/edge/%s_%s_%s.png"
 
+# Tall grass is ground cover rather than terrain: it is painted on its own
+# layer over whatever grass tile is already there, carries no collision, and is
+# partly transparent so the ground still shows through between the blades.
+const TALL_GRASS_PATH := "res://assets/tiles/overlay/tall_grass.png"
+const OVERLAY_LAYER := 1
+# Patches come from their own noise field, so they clump into meadows instead
+# of speckling single tufts across open country.
+const TALL_GRASS_LEVEL := 0.22
+const TALL_GRASS_FREQUENCY := 0.09
+
 # Forests are broad noise masses; a second, finer noise punches clearings
 # through them so a forest never becomes an impassable wall of trees.
 const FOREST_LEVEL := 0.25
@@ -103,9 +113,11 @@ var village_houses: Dictionary = {}
 var atlas_offsets: Array[int] = []
 var atlas_count := 0
 var edge_offset := 0
+var tall_grass_tile := 0
 var noise := FastNoiseLite.new()
 var forest_noise := FastNoiseLite.new()
 var clearing_noise := FastNoiseLite.new()
+var tall_grass_noise := FastNoiseLite.new()
 var world_seed := 0
 
 func _ready() -> void:
@@ -116,6 +128,8 @@ func _ready() -> void:
 	forest_noise.frequency = 0.04
 	clearing_noise.seed = world_seed + 2
 	clearing_noise.frequency = CLEARING_FREQUENCY
+	tall_grass_noise.seed = world_seed + 3
+	tall_grass_noise.frequency = TALL_GRASS_FREQUENCY
 	_build_tileset()
 
 func _build_tileset() -> void:
@@ -126,6 +140,8 @@ func _build_tileset() -> void:
 		total += TERRAIN_VARIANTS[terrain]
 	edge_offset = total
 	total += EDGE_PAIRS.size() * EDGE_KINDS.size()
+	tall_grass_tile = total
+	total += 1
 	atlas_count = total
 	var img := Image.create_empty(TILE_PX * atlas_count, TILE_PX, false, Image.FORMAT_RGBA8)
 	for terrain in TERRAIN_NAMES.size():
@@ -137,6 +153,7 @@ func _build_tileset() -> void:
 		for kind in EDGE_KINDS.size():
 			_blit_tile(img, load(EDGE_PATH % [names[0], names[1], EDGE_KINDS[kind]]),
 				_edge_atlas(pair, kind))
+	_blit_tile(img, load(TALL_GRASS_PATH), tall_grass_tile)
 	var atlas := TileSetAtlasSource.new()
 	atlas.texture = ImageTexture.create_from_image(img)
 	atlas.texture_region_size = Vector2i(TILE_PX, TILE_PX)
@@ -153,6 +170,10 @@ func _build_tileset() -> void:
 	for kind in EDGE_KINDS.size():
 		_make_tile_solid(atlas, _edge_atlas(WATER, kind))
 	tilemap.tile_set = tileset
+	# Ground cover draws over the terrain layer but is still below the entities,
+	# which live on their own y-sorted node, so the player walks through it.
+	while tilemap.get_layers_count() <= OVERLAY_LAYER:
+		tilemap.add_layer(-1)
 
 func _edge_atlas(pair: int, kind: int) -> int:
 	return edge_offset + pair * EDGE_KINDS.size() + kind
@@ -202,6 +223,9 @@ func _generate_chunk(chunk: Vector2i) -> void:
 			var wx := chunk.x * CHUNK_SIZE + lx
 			var wy := chunk.y * CHUNK_SIZE + ly
 			tilemap.set_cell(0, Vector2i(wx, wy), 0, Vector2i(_atlas_tile(wx, wy), 0))
+			if _has_tall_grass(wx, wy):
+				tilemap.set_cell(OVERLAY_LAYER, Vector2i(wx, wy), 0,
+					Vector2i(tall_grass_tile, 0))
 	loaded_chunks[chunk] = true
 	_spawn_objects(chunk)
 
@@ -243,6 +267,27 @@ func _has_boulder(wx: int, wy: int) -> bool:
 	if _in_village(wx, wy):
 		return false
 	return absi(hash(Vector3i(wx, wy, world_seed + 29))) % BOULDER_RARITY == 0
+
+# Tall grass only covers open ground: never a tile an object already stands on,
+# so a tuft cannot poke out from under a trunk or a boulder. Clearance is the
+# footprint itself, which lets meadows grow right up against a tree.
+#
+# Tested cheapest first. The noise threshold rejects most of the world on its
+# own, which keeps the terrain and object lookups below off the common path.
+func _has_tall_grass(wx: int, wy: int) -> bool:
+	if tall_grass_noise.get_noise_2d(wx, wy) <= TALL_GRASS_LEVEL:
+		return false
+	if absi(wx) <= SPAWN_CLEARANCE and absi(wy) <= SPAWN_CLEARANCE:
+		return false
+	if _terrain_at(wx, wy) != GRASS:
+		return false
+	# Houses are only ever built inside a village, so the village test covers
+	# their footprints as well as keeping the plaza tidy.
+	if _in_village(wx, wy):
+		return false
+	if _tree_covers(wx, wy):
+		return false
+	return not _has_boulder(wx, wy)
 
 func _tree_covers(wx: int, wy: int) -> bool:
 	return _has_tree(wx - posmod(wx, TREE_TILES), wy - posmod(wy, TREE_TILES))
@@ -441,6 +486,7 @@ func _unload_chunk(chunk: Vector2i) -> void:
 			var wx := chunk.x * CHUNK_SIZE + lx
 			var wy := chunk.y * CHUNK_SIZE + ly
 			tilemap.erase_cell(0, Vector2i(wx, wy))
+			tilemap.erase_cell(OVERLAY_LAYER, Vector2i(wx, wy))
 	loaded_chunks.erase(chunk)
 	for obj: Node in chunk_objects.get(chunk, []):
 		obj.queue_free()
