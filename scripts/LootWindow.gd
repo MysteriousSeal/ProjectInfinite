@@ -1,6 +1,8 @@
 extends CanvasLayer
 
-const PANEL := Rect2(128, 70, 224, 180)
+# A dialog rather than a full screen panel: it keeps a fixed size and is
+# centred, so its text stays the same physical size at any resolution.
+const PANEL_SIZE := Vector2(224, 180)
 const PAD := 16.0
 const SLOT := 34.0
 const SLOT_GAP := 8.0
@@ -92,17 +94,19 @@ func _close_if_emptied() -> void:
 func _draw_window() -> void:
 	if not is_instance_valid(pouch) or not is_instance_valid(player):
 		return
-	UiTheme.panel(window, PANEL)
-	var left := PANEL.position.x + PAD
-	var right := PANEL.end.x - PAD
+	var view := window.get_viewport_rect().size
+	var panel := Rect2(((view - PANEL_SIZE) * 0.5).round(), PANEL_SIZE)
+	UiTheme.panel(window, panel)
+	var left := panel.position.x + PAD
+	var right := panel.end.x - PAD
 
-	window.draw_rect(Rect2(PANEL.position.x + 4.0, PANEL.position.y + 4.0,
-		PANEL.size.x - 8.0, 24.0), Color(0.16, 0.18, 0.22, 0.85))
-	UiTheme.rule(window, PANEL.position.x + 4.0, PANEL.end.x - 4.0, PANEL.position.y + 28.0)
-	UiTheme.text(window, Vector2(left, PANEL.position.y + 9.0), "POUCH", UiTheme.SIZE_TITLE,
+	window.draw_rect(Rect2(panel.position.x + 4.0, panel.position.y + 4.0,
+		panel.size.x - 8.0, 24.0), Color(0.16, 0.18, 0.22, 0.85))
+	UiTheme.rule(window, panel.position.x + 4.0, panel.end.x - 4.0, panel.position.y + 28.0)
+	UiTheme.text(window, Vector2(left, panel.position.y + 9.0), "POUCH", UiTheme.SIZE_TITLE,
 		UiTheme.ACCENT, true)
 
-	var y := PANEL.position.y + 40.0
+	var y := panel.position.y + 40.0
 	UiTheme.text(window, Vector2(left, y), "GOLD", UiTheme.SIZE_HEAD, UiTheme.DIM)
 	UiTheme.text_right(window, right, y - 4.0, "%d" % pouch.gold, UiTheme.SIZE_TITLE,
 		UiTheme.ACCENT if pouch.gold > 0 else UiTheme.DIM)
@@ -123,7 +127,7 @@ func _draw_window() -> void:
 		UiTheme.text(window, at + Vector2(2.0, SLOT + 4.0), "%d" % (i + 1), UiTheme.SIZE_HEAD,
 			UiTheme.ACCENT)
 
-	var hint_y := PANEL.end.y - 30.0
+	var hint_y := panel.end.y - 30.0
 	UiTheme.rule(window, left, right, hint_y - 8.0)
 	if player.bag_is_full() and not pouch.items.is_empty():
 		UiTheme.text(window, Vector2(left, hint_y), "BAG FULL", UiTheme.SIZE_HEAD, UiTheme.ACCENT)
