@@ -1,17 +1,9 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/Main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/ChunkManager.gd" id="2_chunks"]
 [ext_resource type="Script" path="res://scripts/Hud.gd" id="3_hud"]
 [ext_resource type="Script" path="res://scripts/CharacterSheet.gd" id="4_sheet"]
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_sheet"]
-bg_color = Color(0.09, 0.11, 0.1, 0.98)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(0.82, 0.78, 0.62, 1)
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -82,44 +74,8 @@ text = "Press E to open"
 process_mode = 3
 script = ExtResource("4_sheet")
 
-[node name="Panel" type="Panel" parent="CharacterSheet"]
-offset_left = 24.0
-offset_top = 8.0
-offset_right = 456.0
-offset_bottom = 312.0
-theme_override_styles/panel = SubResource("StyleBoxFlat_sheet")
-
-[node name="Margin" type="MarginContainer" parent="CharacterSheet/Panel"]
+[node name="Sheet" type="Control" parent="CharacterSheet"]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-theme_override_constants/margin_left = 14
-theme_override_constants/margin_top = 8
-theme_override_constants/margin_right = 14
-theme_override_constants/margin_bottom = 8
-
-[node name="Rows" type="VBoxContainer" parent="CharacterSheet/Panel/Margin"]
-theme_override_constants/separation = 5
-
-[node name="Title" type="Label" parent="CharacterSheet/Panel/Margin/Rows"]
-theme_override_font_sizes/font_size = 10
-text = "CHARACTER          [I] or [Esc] to close"
-
-[node name="StatRows" type="HBoxContainer" parent="CharacterSheet/Panel/Margin/Rows"]
-
-[node name="Names" type="Label" parent="CharacterSheet/Panel/Margin/Rows/StatRows"]
-theme_override_font_sizes/font_size = 10
-text = "Level"
-
-[node name="Values" type="Label" parent="CharacterSheet/Panel/Margin/Rows/StatRows"]
-theme_override_font_sizes/font_size = 10
-size_flags_horizontal = 3
-horizontal_alignment = 2
-text = "1"
-
-[node name="BagTitle" type="Label" parent="CharacterSheet/Panel/Margin/Rows"]
-theme_override_font_sizes/font_size = 10
-text = "BAG"
-
-[node name="Bag" type="GridContainer" parent="CharacterSheet/Panel/Margin/Rows"]
-columns = 5
+mouse_filter = 2
