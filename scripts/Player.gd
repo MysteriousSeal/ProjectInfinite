@@ -6,7 +6,14 @@ const ATTACK_COOLDOWN := 0.3
 const ATTACK_DAMAGE := 10
 const HITBOX_OFFSET := 12.0
 const XP_FOR_FIRST_LEVEL := 20
-const HEALTH_PER_LEVEL := 10
+const MIN_ATTACK_COOLDOWN := 0.12
+
+enum Stat { ENDURANCE, STAMINA, DEXTERITY, INTELLIGENCE }
+
+const BASE_STAT := 5
+const HEALTH_PER_ENDURANCE := 10
+const SPEED_PER_DEXTERITY := 4.0
+const COOLDOWN_PER_DEXTERITY := 0.01
 
 @onready var health: Health = $Health
 @onready var hitbox: Area2D = $Hitbox
@@ -19,12 +26,20 @@ var loot_count := 0
 var xp := 0
 var level := 1
 var xp_to_next := XP_FOR_FIRST_LEVEL
+var endurance := BASE_STAT
+var stamina := BASE_STAT
+var dexterity := BASE_STAT
+var intelligence := BASE_STAT
+var stat_points := 0
+var nearby_pouches: Array[Node] = []
 var _attack_key_was_down := false
+var _open_key_was_down := false
 
 signal died
 signal loot_changed(count: int)
 signal xp_changed(xp: int, xp_to_next: int)
 signal leveled_up(level: int)
+signal stats_changed
 
 func _ready() -> void:
 	add_to_group("player")
@@ -34,6 +49,8 @@ func _ready() -> void:
 
 func _physics_process(delta: float) -> void:
 	_tick_timers(delta)
+	if _poll_open_pressed():
+		_open_nearby_pouch()
 	if attacking:
 		velocity = Vector2.ZERO
 	else:
@@ -48,7 +65,7 @@ func _handle_movement() -> void:
 	if dir.length() > 0.0:
 		dir = dir.normalized()
 		facing = dir
-	velocity = dir * SPEED
+	velocity = dir * move_speed()
 
 func _get_input_dir() -> Vector2:
 	var dir := Vector2.ZERO
@@ -68,10 +85,29 @@ func _poll_attack_pressed() -> bool:
 	_attack_key_was_down = down
 	return just_pressed
 
+func _poll_open_pressed() -> bool:
+	var down := Input.is_physical_key_pressed(KEY_E)
+	var just_pressed := down and not _open_key_was_down
+	_open_key_was_down = down
+	return just_pressed
+
+func pouch_in_range(pouch: Node) -> void:
+	if not nearby_pouches.has(pouch):
+		nearby_pouches.append(pouch)
+
+func pouch_out_of_range(pouch: Node) -> void:
+	nearby_pouches.erase(pouch)
+
+func _open_nearby_pouch() -> void:
+	if nearby_pouches.is_empty():
+		return
+	var pouch: Node = nearby_pouches.pop_front()
+	add_loot(pouch.open())
+
 func _start_attack() -> void:
 	attacking = true
 	attack_timer = ATTACK_DURATION
-	cooldown_timer = ATTACK_COOLDOWN
+	cooldown_timer = attack_cooldown()
 	hitbox.position = facing * HITBOX_OFFSET
 	hitbox.monitoring = true
 
@@ -101,9 +137,31 @@ func add_xp(amount: int) -> void:
 		xp -= xp_to_next
 		level += 1
 		xp_to_next = XP_FOR_FIRST_LEVEL * level
-		health.increase_max(HEALTH_PER_LEVEL)
+		stat_points += 1
 		leveled_up.emit(level)
 	xp_changed.emit(xp, xp_to_next)
+
+func spend_stat_point(stat: Stat) -> void:
+	if stat_points <= 0:
+		return
+	stat_points -= 1
+	match stat:
+		Stat.ENDURANCE:
+			endurance += 1
+			health.increase_max(HEALTH_PER_ENDURANCE)
+		Stat.STAMINA:
+			stamina += 1
+		Stat.DEXTERITY:
+			dexterity += 1
+		Stat.INTELLIGENCE:
+			intelligence += 1
+	stats_changed.emit()
+
+func move_speed() -> float:
+	return SPEED + (dexterity - BASE_STAT) * SPEED_PER_DEXTERITY
+
+func attack_cooldown() -> float:
+	return maxf(ATTACK_COOLDOWN - (dexterity - BASE_STAT) * COOLDOWN_PER_DEXTERITY, MIN_ATTACK_COOLDOWN)
 
 func _on_died() -> void:
 	died.emit()

@@ -1,8 +1,14 @@
 extends CanvasLayer
 
 @onready var label: Label = $Label
+@onready var prompt: Label = $Prompt
 
 var player: Node
+
+func _process(_delta: float) -> void:
+	if not is_instance_valid(player):
+		return
+	prompt.visible = not player.nearby_pouches.is_empty()
 
 func bind(target: Node) -> void:
 	player = target
