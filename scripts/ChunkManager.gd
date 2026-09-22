@@ -49,7 +49,7 @@ const HOUSE_TEXTURES := [
 	preload("res://assets/objects/house_1.png"),
 	preload("res://assets/objects/house_2.png"),
 ]
-const HOUSE_TILES := 2
+const HOUSE_TILES := 4
 const HOUSE_PX := HOUSE_TILES * TILE_PX
 
 const VILLAGE_REGION := 96
@@ -57,9 +57,9 @@ const VILLAGE_CHANCE := 0.45
 # Ground forced to plain grass around the centre. Comfortably wider than the
 # house ring so no lake or wood ever reaches a doorstep.
 const VILLAGE_CLEAR := 16
-# Six tiles still leaves three clear around the spawn point, and keeps the
-# houses close enough that the plaza reads as a village rather than a field.
-const VILLAGE_RING := 6
+# Smallest ring that keeps a four-tile house clear of the spawn point; any
+# tighter and a diagonal house lands on top of the player.
+const VILLAGE_RING := 8
 const VILLAGE_HOUSES_MIN := 4
 const VILLAGE_HOUSES_MAX := 6
 

@@ -1,15 +1,15 @@
 [gd_scene load_steps=2 format=3]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_house"]
-size = Vector2(32, 32)
+size = Vector2(64, 64)
 
 [node name="House" type="StaticBody2D"]
 collision_layer = 1
 collision_mask = 0
 
 [node name="Sprite" type="Sprite2D" parent="."]
-offset = Vector2(0, -16)
+offset = Vector2(0, -32)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
-position = Vector2(0, -16)
+position = Vector2(0, -32)
 shape = SubResource("RectangleShape2D_house")
