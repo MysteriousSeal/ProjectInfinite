@@ -13,8 +13,11 @@ const TREE_TILE := 3
 const GRASS_COLOR := Color(0.19, 0.56, 0.24)
 const WATER_COLOR := Color(0.16, 0.45, 0.85)
 const SAND_COLOR := Color(0.75, 0.68, 0.45)
-const CANOPY_COLOR := Color(0.10, 0.34, 0.16)
-const TRUNK_COLOR := Color(0.35, 0.24, 0.13)
+
+# Wang tileset from PixelLab. Only the all-canopy tile is used for now; the
+# other 15 are edge and corner pieces kept for when forests get autotiled.
+const CANOPY_SHEET := preload("res://assets/tilesets/forest_canopy.png")
+const CANOPY_SHEET_RECT := Rect2i(0, 48, 16, 16)
 
 # Forests are broad noise masses; a second, finer noise punches clearings
 # through them so a forest never becomes an impassable wall of trees.
@@ -58,7 +61,9 @@ func _build_tileset() -> void:
 	var img := Image.create_empty(TILE_PX * colors.size(), TILE_PX, false, Image.FORMAT_RGBA8)
 	for i in colors.size():
 		img.fill_rect(Rect2i(i * TILE_PX, 0, TILE_PX, TILE_PX), colors[i])
-	_draw_tree(img, TREE_TILE)
+	var canopy := CANOPY_SHEET.get_image()
+	canopy.convert(Image.FORMAT_RGBA8)
+	img.blit_rect(canopy, CANOPY_SHEET_RECT, Vector2i(TREE_TILE * TILE_PX, 0))
 	var atlas := TileSetAtlasSource.new()
 	atlas.texture = ImageTexture.create_from_image(img)
 	atlas.texture_region_size = Vector2i(TILE_PX, TILE_PX)
@@ -72,12 +77,6 @@ func _build_tileset() -> void:
 	_make_tile_solid(atlas, WATER_TILE)
 	_make_tile_solid(atlas, TREE_TILE)
 	tilemap.tile_set = tileset
-
-func _draw_tree(img: Image, tile_id: int) -> void:
-	var ox := tile_id * TILE_PX
-	img.fill_rect(Rect2i(ox + 7, 10, 2, 5), TRUNK_COLOR)
-	img.fill_rect(Rect2i(ox + 4, 2, 8, 9), CANOPY_COLOR)
-	img.fill_rect(Rect2i(ox + 2, 4, 12, 5), CANOPY_COLOR)
 
 func _make_tile_solid(atlas: TileSetAtlasSource, tile_id: int) -> void:
 	var half := TILE_PX / 2.0
