@@ -8,15 +8,15 @@ const ONE_ITEM_CHANCE := 0.45
 const TWO_ITEM_CHANCE := 0.12
 
 var gold := 0
-var items: Array[int] = []
+var items: Array[ItemInstance] = []
 
 func _ready() -> void:
 	gold = randi_range(MIN_GOLD, MAX_GOLD)
 	var roll := randf()
 	if roll < ONE_ITEM_CHANCE:
-		items.append(Items.random_index())
+		items.append(Items.roll())
 	if roll < TWO_ITEM_CHANCE:
-		items.append(Items.random_index())
+		items.append(Items.roll())
 	body_entered.connect(_on_body_entered)
 	body_exited.connect(_on_body_exited)
 

@@ -1,7 +1,9 @@
 extends CanvasLayer
 
 const SPEND_KEYS := [KEY_1, KEY_2, KEY_3, KEY_4]
-const STAT_NAMES := ["ENDURANCE", "STAMINA", "DEXTERITY", "INTELLIGENCE"]
+# Named once in the catalogue so an item's attribute and the player's own are
+# always spelled the same way.
+const STAT_NAMES := Items.ATTRIBUTE_NAMES
 
 # Margins and the column split are fractions of the screen, so the panel keeps
 # its proportions whatever resolution the game runs at. Everything inside is
@@ -21,6 +23,22 @@ const GEAR_SLOT := 34.0
 const WEAPON_HINT := preload("res://assets/items/sword_iron.png")
 const GEAR_LABELS := ["WEAPON", "ARMOUR"]
 
+# Moving the bag cursor. The game is paused while the sheet is up, so these
+# cannot also be driving the player. Declared after BAG_COLUMNS because the
+# vertical step is a whole row.
+const CURSOR_KEYS := [
+	{"key": KEY_LEFT, "step": -1}, {"key": KEY_A, "step": -1},
+	{"key": KEY_RIGHT, "step": 1}, {"key": KEY_D, "step": 1},
+	{"key": KEY_UP, "step": -BAG_COLUMNS}, {"key": KEY_W, "step": -BAG_COLUMNS},
+	{"key": KEY_DOWN, "step": BAG_COLUMNS}, {"key": KEY_S, "step": BAG_COLUMNS},
+]
+const EQUIP_KEY := KEY_ENTER
+const UNEQUIP_KEY := KEY_U
+
+# Where the selected item's numbers are printed, measured up from the footer.
+const DETAIL_TOP := 96.0
+const DETAIL_ROW := 13.0
+
 @onready var sheet: Control = $Sheet
 
 var player: Node
@@ -32,8 +50,13 @@ var _split: float
 var _right: float
 var _edge: float
 
+var cursor := 0
+
 var _toggle_was_down := false
 var _spend_was_down := [false, false, false, false]
+var _cursor_was_down := [false, false, false, false, false, false, false, false]
+var _equip_was_down := false
+var _unequip_was_down := false
 
 func _ready() -> void:
 	sheet.draw.connect(_draw_sheet)
@@ -46,6 +69,8 @@ func _process(_delta: float) -> void:
 	_poll_toggle()
 	if is_open:
 		_poll_spend()
+		_poll_cursor()
+		_poll_equip()
 		sheet.queue_redraw()
 
 func _poll_toggle() -> void:
@@ -62,6 +87,8 @@ func _set_open(open: bool) -> void:
 	is_open = open
 	sheet.visible = open
 	get_tree().paused = open
+	if open and is_instance_valid(player):
+		_clamp_cursor()
 
 func _poll_spend() -> void:
 	if not is_instance_valid(player):
@@ -72,6 +99,42 @@ func _poll_spend() -> void:
 		if down and not _spend_was_down[i]:
 			player.spend_stat_point(i)
 		_spend_was_down[i] = down
+
+func _poll_cursor() -> void:
+	if not is_instance_valid(player):
+		return
+	var bag: Array = player.bag
+	for i in CURSOR_KEYS.size():
+		var entry: Dictionary = CURSOR_KEYS[i]
+		var down := Input.is_physical_key_pressed(entry["key"])
+		# Clamped rather than wrapped, so a held key settles at an edge instead
+		# of cycling the cursor around the grid.
+		if down and not _cursor_was_down[i] and not bag.is_empty():
+			cursor = clampi(cursor + int(entry["step"]), 0, bag.size() - 1)
+		_cursor_was_down[i] = down
+
+func _poll_equip() -> void:
+	if not is_instance_valid(player):
+		return
+	var down := Input.is_physical_key_pressed(EQUIP_KEY)
+	if down and not _equip_was_down and cursor < player.bag.size():
+		player.equip(cursor)
+		_clamp_cursor()
+	_equip_was_down = down
+
+	var off := Input.is_physical_key_pressed(UNEQUIP_KEY)
+	if off and not _unequip_was_down:
+		player.unequip()
+		_clamp_cursor()
+	_unequip_was_down = off
+
+func _clamp_cursor() -> void:
+	cursor = clampi(cursor, 0, maxi(player.bag.size() - 1, 0))
+
+func _selected_item() -> ItemInstance:
+	if not is_instance_valid(player) or cursor >= player.bag.size():
+		return null
+	return player.bag[cursor]
 
 func _update_layout() -> void:
 	var view := sheet.get_viewport_rect().size
@@ -131,7 +194,6 @@ func _draw_left() -> void:
 		UiTheme.text_right(sheet, column_edge, top + 136.0, "%d TO SPEND" % spendable,
 			UiTheme.SIZE_HEAD, UiTheme.ACCENT)
 
-	var values := [player.endurance, player.stamina, player.dexterity, player.intelligence]
 	for i in STAT_NAMES.size():
 		var row_y := top + 154.0 + i * 18.0
 		# Rows alternate a faint wash so the eye tracks across to the value.
@@ -142,8 +204,14 @@ func _draw_left() -> void:
 		UiTheme.text(sheet, Vector2(_left, row_y), "%d" % (i + 1), UiTheme.SIZE_BODY, key_colour)
 		UiTheme.text(sheet, Vector2(_left + 14.0, row_y), STAT_NAMES[i], UiTheme.SIZE_BODY,
 			UiTheme.TEXT)
-		UiTheme.text_right(sheet, column_edge, row_y, "%d" % values[i], UiTheme.SIZE_BODY,
-			UiTheme.TEXT)
+		# What gear adds is shown beside the earned value rather than folded into
+		# it, so it is clear what is lost by taking the weapon off.
+		var bonus: int = player.attribute_bonus(i)
+		var shown := "%d" % player.base_attribute(i)
+		if bonus > 0:
+			shown += " +%d" % bonus
+		UiTheme.text_right(sheet, column_edge, row_y, shown, UiTheme.SIZE_BODY,
+			UiTheme.ACCENT if bonus > 0 else UiTheme.TEXT)
 
 	# Gold runs along a footer pinned to the bottom edge, under both columns.
 	UiTheme.rule(sheet, _left, _edge, _panel.end.y - 28.0)
@@ -157,14 +225,23 @@ func _draw_right() -> void:
 	UiTheme.text(sheet, Vector2(_right, top + 36.0), "EQUIPMENT", UiTheme.SIZE_HEAD,
 		UiTheme.ACCENT)
 	UiTheme.rule(sheet, _right, _edge, top + 48.0)
+	var held: ItemInstance = player.equipped
 	for i in GEAR_LABELS.size():
 		var at := Vector2(_right + i * (GEAR_SLOT + 16.0), top + 56.0)
+		var box := Rect2(at + Vector2(1.0, 1.0), Vector2(GEAR_SLOT - 2.0, GEAR_SLOT - 2.0))
 		UiTheme.slot(sheet, at, GEAR_SLOT)
-		if i == 0:
-			sheet.draw_texture_rect(WEAPON_HINT, Rect2(at + Vector2(1.0, 1.0),
-				Vector2(GEAR_SLOT - 2.0, GEAR_SLOT - 2.0)), false, Color(1, 1, 1, 0.18))
+		if i == 0 and held != null:
+			sheet.draw_texture_rect(held.icon(), box, false)
+		elif i == 0:
+			sheet.draw_texture_rect(WEAPON_HINT, box, false, Color(1, 1, 1, 0.18))
 		UiTheme.text(sheet, Vector2(at.x, at.y + GEAR_SLOT + 6.0), GEAR_LABELS[i],
 			UiTheme.SIZE_HEAD, UiTheme.DIM)
+	if held != null:
+		var beside := _right + GEAR_LABELS.size() * (GEAR_SLOT + 16.0)
+		UiTheme.text(sheet, Vector2(beside, top + 58.0), held.item_name(),
+			UiTheme.SIZE_BODY, UiTheme.TEXT)
+		UiTheme.text(sheet, Vector2(beside, top + 72.0), held.summary(),
+			UiTheme.SIZE_HEAD, UiTheme.ACCENT)
 
 	var bag: Array = player.bag
 	var capacity: int = player.BAG_CAPACITY
@@ -176,7 +253,33 @@ func _draw_right() -> void:
 		var at := Vector2(
 			_right + (i % BAG_COLUMNS) * (SLOT + SLOT_GAP),
 			top + 132.0 + (i / BAG_COLUMNS) * (SLOT + SLOT_GAP))
-		UiTheme.slot(sheet, at, SLOT, i < bag.size())
+		# The highlight now marks the cursor rather than merely a full slot,
+		# which the icon already shows.
+		UiTheme.slot(sheet, at, SLOT, i == cursor and i < bag.size())
 		if i < bag.size():
-			sheet.draw_texture_rect(Items.icon(bag[i]),
+			var entry: ItemInstance = bag[i]
+			sheet.draw_texture_rect(entry.icon(),
 				Rect2(at + Vector2(1.0, 1.0), Vector2(SLOT - 2.0, SLOT - 2.0)), false)
+	_draw_detail()
+
+# The selected sword's numbers, which the 34px slots have no room for.
+func _draw_detail() -> void:
+	var detail_y := _panel.end.y - DETAIL_TOP
+	UiTheme.rule(sheet, _right, _edge, detail_y)
+	var item := _selected_item()
+	if item == null:
+		UiTheme.text(sheet, Vector2(_right, detail_y + 10.0), "BAG EMPTY",
+			UiTheme.SIZE_HEAD, UiTheme.DIM)
+		return
+	UiTheme.text(sheet, Vector2(_right, detail_y + 8.0), item.item_name(),
+		UiTheme.SIZE_BODY, UiTheme.TEXT)
+	var row_y := detail_y + 24.0
+	for row: PackedStringArray in item.detail_rows():
+		UiTheme.text(sheet, Vector2(_right, row_y), row[0], UiTheme.SIZE_HEAD, UiTheme.DIM)
+		UiTheme.text_right(sheet, _edge, row_y, row[1], UiTheme.SIZE_HEAD, UiTheme.TEXT)
+		row_y += DETAIL_ROW
+	var hint := "[ENTER] EQUIP"
+	if player.equipped != null:
+		hint += "    [U] UNEQUIP"
+	UiTheme.text(sheet, Vector2(_right, _panel.end.y - 40.0), hint,
+		UiTheme.SIZE_HEAD, UiTheme.ACCENT)

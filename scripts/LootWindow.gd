@@ -2,10 +2,12 @@ extends CanvasLayer
 
 # A dialog rather than a full screen panel: it keeps a fixed size and is
 # centred, so its text stays the same physical size at any resolution.
-const PANEL_SIZE := Vector2(224, 180)
+const PANEL_SIZE := Vector2(248, 196)
 const PAD := 16.0
 const SLOT := 34.0
-const SLOT_GAP := 8.0
+# One row per item: the icon on the left, its name and rolled numbers beside it,
+# because two identical-looking swords can now carry very different stats.
+const ROW_HEIGHT := 40.0
 const TAKE_KEYS := [KEY_1, KEY_2, KEY_3, KEY_4]
 
 @onready var window: Control = $Window
@@ -120,12 +122,18 @@ func _draw_window() -> void:
 		UiTheme.text(window, Vector2(left, y + 10.0), "NOTHING ELSE INSIDE", UiTheme.SIZE_BODY,
 			UiTheme.DIM)
 	for i in pouch.items.size():
-		var at := Vector2(left + i * (SLOT + SLOT_GAP), y)
+		var item: ItemInstance = pouch.items[i]
+		var at := Vector2(left, y + i * ROW_HEIGHT)
 		UiTheme.slot(window, at, SLOT)
-		window.draw_texture_rect(Items.icon(pouch.items[i]),
+		window.draw_texture_rect(item.icon(),
 			Rect2(at + Vector2(1.0, 1.0), Vector2(SLOT - 2.0, SLOT - 2.0)), false)
-		UiTheme.text(window, at + Vector2(2.0, SLOT + 4.0), "%d" % (i + 1), UiTheme.SIZE_HEAD,
+		var text_x := at.x + SLOT + 8.0
+		UiTheme.text(window, Vector2(text_x, at.y + 2.0), "%d" % (i + 1), UiTheme.SIZE_HEAD,
 			UiTheme.ACCENT)
+		UiTheme.text(window, Vector2(text_x + 12.0, at.y + 2.0), item.item_name(),
+			UiTheme.SIZE_BODY, UiTheme.TEXT)
+		UiTheme.text(window, Vector2(text_x + 12.0, at.y + 16.0), item.summary(),
+			UiTheme.SIZE_HEAD, UiTheme.DIM)
 
 	var hint_y := panel.end.y - 30.0
 	UiTheme.rule(window, left, right, hint_y - 8.0)

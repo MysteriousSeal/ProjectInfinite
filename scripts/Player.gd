@@ -3,6 +3,7 @@ extends CharacterBody2D
 const SPEED := 90.0
 const ATTACK_DURATION := 0.18
 const ATTACK_COOLDOWN := 0.3
+# Damage with bare hands; an equipped weapon adds its own attack on top.
 const ATTACK_DAMAGE := 10
 const HITBOX_OFFSET := 12.0
 const XP_FOR_FIRST_LEVEL := 20
@@ -41,13 +42,15 @@ var dexterity := BASE_STAT
 var intelligence := BASE_STAT
 var stat_points := 0
 var nearby_pouches: Array[Node] = []
-var bag: Array[int] = []
+var bag: Array[ItemInstance] = []
+var equipped: ItemInstance = null
 var _attack_key_was_down := false
 var _open_key_was_down := false
 
 signal died
 signal loot_changed(count: int)
 signal bag_changed
+signal equipment_changed
 signal pouch_opened(pouch: Node)
 signal xp_changed(xp: int, xp_to_next: int)
 signal leveled_up(level: int)
@@ -144,7 +147,7 @@ func _tick_timers(delta: float) -> void:
 
 func _on_hitbox_body_entered(body: Node) -> void:
 	if body.has_method("take_hit"):
-		body.take_hit(ATTACK_DAMAGE, facing)
+		body.take_hit(attack_damage(), facing)
 
 func take_hit(amount: int, _from_dir: Vector2) -> void:
 	health.take_damage(amount)
@@ -156,12 +159,63 @@ func add_loot(amount: int) -> void:
 func bag_is_full() -> bool:
 	return bag.size() >= BAG_CAPACITY
 
-func add_item(index: int) -> bool:
+func add_item(item: ItemInstance) -> bool:
 	if bag_is_full():
 		return false
-	bag.append(index)
+	bag.append(item)
 	bag_changed.emit()
 	return true
+
+# Equipping swaps: what was held goes back to the slot the new item came from,
+# so the bag never grows or shrinks and the swap cannot fail on a full bag.
+func equip(slot: int) -> bool:
+	if slot < 0 or slot >= bag.size():
+		return false
+	var taken: ItemInstance = bag[slot]
+	if equipped == null:
+		bag.remove_at(slot)
+	else:
+		bag[slot] = equipped
+	equipped = taken
+	_apply_equipment()
+	return true
+
+func unequip() -> bool:
+	if equipped == null or bag_is_full():
+		return false
+	bag.append(equipped)
+	equipped = null
+	_apply_equipment()
+	return true
+
+func _apply_equipment() -> void:
+	health.set_bonus_max(attribute_bonus(Stat.ENDURANCE) * HEALTH_PER_ENDURANCE)
+	bag_changed.emit()
+	equipment_changed.emit()
+	stats_changed.emit()
+
+# What the equipped item adds to one attribute, if anything.
+func attribute_bonus(stat: Stat) -> int:
+	if equipped == null or not equipped.has_attribute() or equipped.attribute != stat:
+		return 0
+	return equipped.attribute_bonus
+
+func base_attribute(stat: Stat) -> int:
+	match stat:
+		Stat.ENDURANCE:
+			return endurance
+		Stat.STAMINA:
+			return stamina
+		Stat.DEXTERITY:
+			return dexterity
+		_:
+			return intelligence
+
+func effective_attribute(stat: Stat) -> int:
+	return base_attribute(stat) + attribute_bonus(stat)
+
+func attack_damage() -> int:
+	return ATTACK_DAMAGE + (equipped.attack if equipped != null else 0)
 
 func add_xp(amount: int) -> void:
 	xp += amount
@@ -190,10 +244,16 @@ func spend_stat_point(stat: Stat) -> void:
 	stats_changed.emit()
 
 func move_speed() -> float:
-	return SPEED + (dexterity - BASE_STAT) * SPEED_PER_DEXTERITY
+	return SPEED + (effective_attribute(Stat.DEXTERITY) - BASE_STAT) * SPEED_PER_DEXTERITY
 
 func attack_cooldown() -> float:
-	return maxf(ATTACK_COOLDOWN - (dexterity - BASE_STAT) * COOLDOWN_PER_DEXTERITY, MIN_ATTACK_COOLDOWN)
+	var dex := effective_attribute(Stat.DEXTERITY)
+	var cooldown := ATTACK_COOLDOWN - (dex - BASE_STAT) * COOLDOWN_PER_DEXTERITY
+	# A weapon's speed is a share off whatever the attributes already earned,
+	# so it stays worth the same proportion at every level.
+	if equipped != null:
+		cooldown *= 1.0 - equipped.speed / 100.0
+	return maxf(cooldown, MIN_ATTACK_COOLDOWN)
 
 func _on_died() -> void:
 	died.emit()
