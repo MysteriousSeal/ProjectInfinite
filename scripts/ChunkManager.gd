@@ -9,7 +9,6 @@ const WORLD_COLLISION_LAYER := 1
 const WATER := 0
 const SAND := 1
 const GRASS := 2
-const CANOPY := 3
 
 # Each terrain is one independent tile, so the atlas is a single strip and a
 # cell is painted from the terrain at its centre. Boundaries land on grid
@@ -18,9 +17,16 @@ const CANOPY := 3
 # Each terrain ships interchangeable variants that share one base colour.
 # Picking between them per cell is what stops a single tile from visibly
 # repeating across the large areas each terrain covers. Indexed by terrain.
-const TERRAIN_NAMES := ["water", "sand", "grass", "tree"]
-const TERRAIN_VARIANTS := [16, 9, 16, 12]
+const TERRAIN_NAMES := ["water", "sand", "grass"]
+const TERRAIN_VARIANTS := [16, 9, 16]
 const TILE_PATH := "res://assets/tiles/%s/%s_%02d.png"
+
+# Trees are objects standing on the grass rather than a terrain, so they carry
+# their own collision and can be drawn in front of or behind the player.
+const TREE_SCENE := preload("res://scenes/Tree.tscn")
+# Canopies are two tiles wide, so only a share of forest cells gets one;
+# otherwise they would pile on top of each other into a solid smear.
+const TREE_SPACING := 3
 
 # Edge tiles let a terrain intrude into the one below it with a shaped border
 # instead of stopping on a grid line. Pair index is the lower terrain, so pair
@@ -55,6 +61,8 @@ const SPAWN_CLEARANCE := 2
 var player: Node2D
 var loaded_chunks: Dictionary = {}
 var lakes: Dictionary = {}
+var tree_parent: Node2D
+var chunk_trees: Dictionary = {}
 var atlas_offsets: Array[int] = []
 var atlas_count := 0
 var edge_offset := 0
@@ -102,9 +110,8 @@ func _build_tileset() -> void:
 	tileset.add_physics_layer()
 	tileset.set_physics_layer_collision_layer(0, WORLD_COLLISION_LAYER)
 	tileset.add_source(atlas, 0)
-	for terrain in [WATER, CANOPY]:
-		for variant in TERRAIN_VARIANTS[terrain]:
-			_make_tile_solid(atlas, atlas_offsets[terrain] + variant)
+	for variant in TERRAIN_VARIANTS[WATER]:
+		_make_tile_solid(atlas, atlas_offsets[WATER] + variant)
 	# A water cell keeps blocking even where sand intrudes into its border.
 	for kind in EDGE_KINDS.size():
 		_make_tile_solid(atlas, _edge_atlas(WATER, kind))
@@ -128,6 +135,10 @@ func _make_tile_solid(atlas: TileSetAtlasSource, tile_id: int) -> void:
 
 func follow(target: Node2D) -> void:
 	player = target
+
+# Trees live outside this node so they can sort against the player by depth.
+func set_tree_parent(target: Node2D) -> void:
+	tree_parent = target
 
 func _process(_delta: float) -> void:
 	if player and is_instance_valid(player):
@@ -155,6 +166,24 @@ func _generate_chunk(chunk: Vector2i) -> void:
 			var wy := chunk.y * CHUNK_SIZE + ly
 			tilemap.set_cell(0, Vector2i(wx, wy), 0, Vector2i(_atlas_tile(wx, wy), 0))
 	loaded_chunks[chunk] = true
+	_spawn_trees(chunk)
+
+func _spawn_trees(chunk: Vector2i) -> void:
+	if tree_parent == null:
+		return
+	var trees: Array[Node] = []
+	for ly in range(CHUNK_SIZE):
+		for lx in range(CHUNK_SIZE):
+			var wx := chunk.x * CHUNK_SIZE + lx
+			var wy := chunk.y * CHUNK_SIZE + ly
+			if not _has_tree(wx, wy):
+				continue
+			var tree := TREE_SCENE.instantiate()
+			# Anchored at the trunk foot, which is what depth sorting compares.
+			tree.position = Vector2(wx * TILE_PX + TILE_PX / 2.0, wy * TILE_PX + TILE_PX)
+			tree_parent.add_child(tree)
+			trees.append(tree)
+	chunk_trees[chunk] = trees
 
 # The variant is derived from the position so a chunk looks the same every
 # time it is streamed back in, rather than reshuffling on every visit.
@@ -202,9 +231,14 @@ func _terrain_at(vx: int, vy: int) -> int:
 		for ox in range(-1, 2):
 			if _is_water(vx + ox, vy + oy):
 				return SAND
-	if _is_forest(vx, vy):
-		return CANOPY
 	return GRASS
+
+# Forest cells still come from the noise, but now decide where a tree object
+# stands rather than which tile gets painted.
+func _has_tree(wx: int, wy: int) -> bool:
+	if not _is_forest(wx, wy):
+		return false
+	return absi(hash(Vector3i(wx, wy, world_seed + 7))) % TREE_SPACING == 0
 
 # A lone tree in open grass reads as debris rather than woodland, so a tile
 # only keeps its tree if it has at least one orthogonal neighbour tree.
@@ -256,3 +290,6 @@ func _unload_chunk(chunk: Vector2i) -> void:
 			var wy := chunk.y * CHUNK_SIZE + ly
 			tilemap.erase_cell(0, Vector2i(wx, wy))
 	loaded_chunks.erase(chunk)
+	for tree: Node in chunk_trees.get(chunk, []):
+		tree.queue_free()
+	chunk_trees.erase(chunk)

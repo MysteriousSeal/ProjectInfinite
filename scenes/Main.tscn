@@ -21,6 +21,9 @@ script = ExtResource("2_chunks")
 
 [node name="TileMap" type="TileMap" parent="ChunkManager"]
 
+[node name="Entities" type="Node2D" parent="."]
+y_sort_enabled = true
+
 [node name="Hud" type="CanvasLayer" parent="."]
 script = ExtResource("3_hud")
 
