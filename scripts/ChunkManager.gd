@@ -242,7 +242,15 @@ func _terrain_at(vx: int, vy: int) -> int:
 func _has_tree(wx: int, wy: int) -> bool:
 	if wx % TREE_TILES != 0 or wy % TREE_TILES != 0:
 		return false
-	return _is_forest(wx, wy)
+	if not _is_forest(wx, wy):
+		return false
+	# The canopy covers the whole block, so every cell under it has to be
+	# grass; otherwise a tree ends up standing in a lake or on the shoreline.
+	for oy in TREE_TILES:
+		for ox in TREE_TILES:
+			if _terrain_at(wx + ox, wy + oy) != GRASS:
+				return false
+	return true
 
 # A lone tree in open grass reads as debris rather than woodland, so a tile
 # only keeps its tree if it has at least one orthogonal neighbour tree.
