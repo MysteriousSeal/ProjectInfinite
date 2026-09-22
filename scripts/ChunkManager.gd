@@ -24,6 +24,10 @@ const TILE_PATH := "res://assets/tiles/%s/%s_%02d.png"
 # Trees are objects standing on the grass rather than a terrain, so they carry
 # their own collision and can be drawn in front of or behind the player.
 const TREE_SCENE := preload("res://scenes/Tree.tscn")
+# A block is filled either by one broad tree or by a pair of narrow conifers
+# standing side by side. Either way the block is covered edge to edge, so the
+# mix varies the canopy without opening gaps or overlapping.
+const SMALL_TREE_SCENE := preload("res://scenes/SmallTree.tscn")
 # A canopy covers two tiles each way, so trees are anchored on even
 # coordinates: one per two-by-two block. They tile edge to edge instead of
 # piling on each other, and because each blocks its whole block, neighbouring
@@ -181,13 +185,21 @@ func _spawn_trees(chunk: Vector2i) -> void:
 			var wy := chunk.y * CHUNK_SIZE + ly
 			if not _has_tree(wx, wy):
 				continue
-			var tree := TREE_SCENE.instantiate()
-			# Anchored at the foot of its block, which is what depth sorting
+			# Anchored at the foot of the block, which is what depth sorting
 			# compares, with the canopy filling the block above.
-			tree.position = Vector2(wx * TILE_PX + TREE_PX / 2.0, wy * TILE_PX + TREE_PX)
-			tree_parent.add_child(tree)
-			trees.append(tree)
+			var foot := wy * TILE_PX + TREE_PX
+			if absi(hash(Vector3i(wx, wy, world_seed + 13))) % 2 == 0:
+				trees.append(_add_tree(TREE_SCENE, Vector2(wx * TILE_PX + TREE_PX / 2.0, foot)))
+			else:
+				trees.append(_add_tree(SMALL_TREE_SCENE, Vector2(wx * TILE_PX + TILE_PX * 0.5, foot)))
+				trees.append(_add_tree(SMALL_TREE_SCENE, Vector2(wx * TILE_PX + TILE_PX * 1.5, foot)))
 	chunk_trees[chunk] = trees
+
+func _add_tree(scene: PackedScene, at: Vector2) -> Node:
+	var tree := scene.instantiate()
+	tree.position = at
+	tree_parent.add_child(tree)
+	return tree
 
 # The variant is derived from the position so a chunk looks the same every
 # time it is streamed back in, rather than reshuffling on every visit.
