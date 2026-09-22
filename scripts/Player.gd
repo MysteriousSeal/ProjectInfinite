@@ -7,6 +7,7 @@ const ATTACK_DAMAGE := 10
 const HITBOX_OFFSET := 12.0
 const XP_FOR_FIRST_LEVEL := 20
 const MIN_ATTACK_COOLDOWN := 0.12
+const BAG_CAPACITY := 20
 
 enum Stat { ENDURANCE, STAMINA, DEXTERITY, INTELLIGENCE }
 
@@ -32,11 +33,14 @@ var dexterity := BASE_STAT
 var intelligence := BASE_STAT
 var stat_points := 0
 var nearby_pouches: Array[Node] = []
+var bag: Array[int] = []
 var _attack_key_was_down := false
 var _open_key_was_down := false
 
 signal died
 signal loot_changed(count: int)
+signal bag_changed
+signal pouch_opened(pouch: Node)
 signal xp_changed(xp: int, xp_to_next: int)
 signal leveled_up(level: int)
 signal stats_changed
@@ -108,8 +112,9 @@ func pouch_out_of_range(pouch: Node) -> void:
 func _open_nearby_pouch() -> void:
 	if nearby_pouches.is_empty():
 		return
-	var pouch: Node = nearby_pouches.pop_front()
-	add_loot(pouch.open())
+	# The pouch is left where it is and stays in range; the window that opens
+	# decides what is taken and whether anything is left behind.
+	pouch_opened.emit(nearby_pouches[0])
 
 func _start_attack() -> void:
 	attacking = true
@@ -137,6 +142,16 @@ func take_hit(amount: int, _from_dir: Vector2) -> void:
 func add_loot(amount: int) -> void:
 	loot_count += amount
 	loot_changed.emit(loot_count)
+
+func bag_is_full() -> bool:
+	return bag.size() >= BAG_CAPACITY
+
+func add_item(index: int) -> bool:
+	if bag_is_full():
+		return false
+	bag.append(index)
+	bag_changed.emit()
+	return true
 
 func add_xp(amount: int) -> void:
 	xp += amount

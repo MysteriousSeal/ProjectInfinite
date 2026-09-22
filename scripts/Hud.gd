@@ -34,7 +34,9 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	if not is_instance_valid(player):
 		return
-	prompt.visible = not player.nearby_pouches.is_empty()
+	# Hidden while a window is up: the pouch stays in range the whole time it
+	# is open, so the prompt would sit on top of its own window.
+	prompt.visible = not player.nearby_pouches.is_empty() and not get_tree().paused
 
 func bind(target: Node) -> void:
 	player = target

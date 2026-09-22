@@ -1,9 +1,10 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/Main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/ChunkManager.gd" id="2_chunks"]
 [ext_resource type="Script" path="res://scripts/Hud.gd" id="3_hud"]
 [ext_resource type="Script" path="res://scripts/CharacterSheet.gd" id="4_sheet"]
+[ext_resource type="Script" path="res://scripts/LootWindow.gd" id="5_loot"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -17,6 +18,7 @@ script = ExtResource("2_chunks")
 y_sort_enabled = true
 
 [node name="Hud" type="CanvasLayer" parent="."]
+process_mode = 3
 script = ExtResource("3_hud")
 
 [node name="Frame" type="Control" parent="Hud"]
@@ -75,6 +77,16 @@ process_mode = 3
 script = ExtResource("4_sheet")
 
 [node name="Sheet" type="Control" parent="CharacterSheet"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+
+[node name="LootWindow" type="CanvasLayer" parent="."]
+process_mode = 3
+script = ExtResource("5_loot")
+
+[node name="Window" type="Control" parent="LootWindow"]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0

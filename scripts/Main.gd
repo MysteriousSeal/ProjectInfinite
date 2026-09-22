@@ -9,6 +9,7 @@ const SPAWN_RADIUS := 150.0
 @onready var entities := $Entities
 @onready var hud := $Hud
 @onready var character_sheet := $CharacterSheet
+@onready var loot_window := $LootWindow
 
 func _ready() -> void:
 	var player := PlayerScene.instantiate()
@@ -19,6 +20,7 @@ func _ready() -> void:
 	chunk_manager.set_object_parent(entities)
 	hud.bind(player)
 	character_sheet.bind(player)
+	loot_window.bind(player)
 	for i in ENEMY_COUNT:
 		var enemy := EnemyScene.instantiate()
 		enemy.global_position = Vector2(randf_range(-SPAWN_RADIUS, SPAWN_RADIUS), randf_range(-SPAWN_RADIUS, SPAWN_RADIUS))
