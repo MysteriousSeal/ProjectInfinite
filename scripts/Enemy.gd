@@ -9,14 +9,25 @@ const DROP_CHANCE := 0.5
 
 const LootItemScene := preload("res://scenes/LootItem.tscn")
 
+# Ordered clockwise from east, matching the angle of the wolf's heading, so a
+# direction is a straight lookup rather than a chain of comparisons.
+const DIRECTIONS := ["east", "south-east", "south", "south-west", "west", "north-west", "north", "north-east"]
+const SPRITE_PATH := "res://assets/enemies/wolf/%s.png"
+# Lifts the sprite until the wolf's paws meet the bottom of its collision box.
+const SPRITE_LIFT := -7
+
 @onready var health: Health = $Health
 @onready var contact_hitbox: Area2D = $ContactHitbox
+@onready var sprite: Sprite2D = $Sprite
 
 var player: Node2D
 var contact_timer := 0.0
+var facing := Vector2.DOWN
 
 func _ready() -> void:
 	add_to_group("enemies")
+	sprite.offset = Vector2(0, SPRITE_LIFT)
+	_face_sprite()
 	health.died.connect(_on_died)
 	contact_hitbox.body_entered.connect(_on_contact_body_entered)
 
@@ -26,10 +37,11 @@ func _physics_process(delta: float) -> void:
 	_find_player()
 	if player and is_instance_valid(player) and global_position.distance_to(player.global_position) <= DETECT_RADIUS:
 		velocity = global_position.direction_to(player.global_position) * SPEED
+		facing = velocity
 	else:
 		velocity = Vector2.ZERO
 	move_and_slide()
-	queue_redraw()
+	_face_sprite()
 
 func _find_player() -> void:
 	if player and is_instance_valid(player):
@@ -55,5 +67,8 @@ func _on_died() -> void:
 		get_parent().add_child(loot)
 	queue_free.call_deferred()
 
-func _draw() -> void:
-	draw_rect(Rect2(-7, -7, 14, 14), Color(0.8, 0.2, 0.2))
+# The wolf is drawn for all eight headings, so the angle maps straight onto a
+# slot instead of collapsing diagonals onto a cardinal.
+func _face_sprite() -> void:
+	var slot := posmod(roundi(facing.angle() / (TAU / DIRECTIONS.size())), DIRECTIONS.size())
+	sprite.texture = load(SPRITE_PATH % DIRECTIONS[slot])
