@@ -8,6 +8,19 @@ const WORLD_COLLISION_LAYER := 1
 const GRASS_TILE := 0
 const WATER_TILE := 1
 const SAND_TILE := 2
+const TREE_TILE := 3
+
+const GRASS_COLOR := Color(0.19, 0.56, 0.24)
+const WATER_COLOR := Color(0.16, 0.45, 0.85)
+const SAND_COLOR := Color(0.75, 0.68, 0.45)
+const CANOPY_COLOR := Color(0.10, 0.34, 0.16)
+const TRUNK_COLOR := Color(0.35, 0.24, 0.13)
+
+# Forests are broad noise masses; a second, finer noise punches clearings
+# through them so a forest never becomes an impassable wall of trees.
+const FOREST_LEVEL := 0.25
+const CLEARING_LEVEL := -0.15
+const CLEARING_FREQUENCY := 0.08
 
 # One lake candidate per region. Centers are kept far enough from the region
 # edge that a lake always fits inside it, so lakes never merge into rivers.
@@ -17,7 +30,7 @@ const LAKE_RADIUS_MIN := 3.0
 const LAKE_RADIUS_MAX := 7.0
 const SHORE_WOBBLE := 1.5
 
-# Keeps the player's spawn area walkable so a random seed can't trap them in water.
+# Keeps the player's spawn area walkable so a random seed can't trap them at spawn.
 const SPAWN_CLEARANCE := 2
 
 @onready var tilemap: TileMap = $TileMap
@@ -26,19 +39,26 @@ var player: Node2D
 var loaded_chunks: Dictionary = {}
 var lakes: Dictionary = {}
 var noise := FastNoiseLite.new()
+var forest_noise := FastNoiseLite.new()
+var clearing_noise := FastNoiseLite.new()
 var world_seed := 0
 
 func _ready() -> void:
 	world_seed = randi()
 	noise.seed = world_seed
 	noise.frequency = 0.2
+	forest_noise.seed = world_seed + 1
+	forest_noise.frequency = 0.04
+	clearing_noise.seed = world_seed + 2
+	clearing_noise.frequency = CLEARING_FREQUENCY
 	_build_tileset()
 
 func _build_tileset() -> void:
-	var colors := [Color(0.19, 0.56, 0.24), Color(0.16, 0.45, 0.85), Color(0.75, 0.68, 0.45)]
+	var colors := [GRASS_COLOR, WATER_COLOR, SAND_COLOR, GRASS_COLOR]
 	var img := Image.create_empty(TILE_PX * colors.size(), TILE_PX, false, Image.FORMAT_RGBA8)
 	for i in colors.size():
 		img.fill_rect(Rect2i(i * TILE_PX, 0, TILE_PX, TILE_PX), colors[i])
+	_draw_tree(img, TREE_TILE)
 	var atlas := TileSetAtlasSource.new()
 	atlas.texture = ImageTexture.create_from_image(img)
 	atlas.texture_region_size = Vector2i(TILE_PX, TILE_PX)
@@ -50,7 +70,14 @@ func _build_tileset() -> void:
 	tileset.set_physics_layer_collision_layer(0, WORLD_COLLISION_LAYER)
 	tileset.add_source(atlas, 0)
 	_make_tile_solid(atlas, WATER_TILE)
+	_make_tile_solid(atlas, TREE_TILE)
 	tilemap.tile_set = tileset
+
+func _draw_tree(img: Image, tile_id: int) -> void:
+	var ox := tile_id * TILE_PX
+	img.fill_rect(Rect2i(ox + 7, 10, 2, 5), TRUNK_COLOR)
+	img.fill_rect(Rect2i(ox + 4, 2, 8, 9), CANOPY_COLOR)
+	img.fill_rect(Rect2i(ox + 2, 4, 12, 5), CANOPY_COLOR)
 
 func _make_tile_solid(atlas: TileSetAtlasSource, tile_id: int) -> void:
 	var half := TILE_PX / 2.0
@@ -97,7 +124,24 @@ func _tile_at(wx: int, wy: int) -> int:
 		for ox in range(-1, 2):
 			if _is_water(wx + ox, wy + oy):
 				return SAND_TILE
+	if _is_forest(wx, wy):
+		return TREE_TILE
 	return GRASS_TILE
+
+# A lone tree in open grass reads as debris rather than woodland, so a tile
+# only keeps its tree if it has at least one orthogonal neighbour tree.
+func _is_forest(wx: int, wy: int) -> bool:
+	if not _is_forest_candidate(wx, wy):
+		return false
+	return (_is_forest_candidate(wx - 1, wy) or _is_forest_candidate(wx + 1, wy)
+		or _is_forest_candidate(wx, wy - 1) or _is_forest_candidate(wx, wy + 1))
+
+func _is_forest_candidate(wx: int, wy: int) -> bool:
+	if absi(wx) <= SPAWN_CLEARANCE and absi(wy) <= SPAWN_CLEARANCE:
+		return false
+	if forest_noise.get_noise_2d(wx, wy) < FOREST_LEVEL:
+		return false
+	return clearing_noise.get_noise_2d(wx, wy) > CLEARING_LEVEL
 
 func _is_water(wx: int, wy: int) -> bool:
 	if absi(wx) <= SPAWN_CLEARANCE and absi(wy) <= SPAWN_CLEARANCE:
