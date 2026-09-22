@@ -11,7 +11,7 @@ radius = 10.0
 
 [node name="Player" type="CharacterBody2D"]
 collision_layer = 2
-collision_mask = 4
+collision_mask = 5
 script = ExtResource("1_player")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
@@ -30,4 +30,4 @@ monitoring = false
 shape = SubResource("CircleShape2D_hitbox")
 
 [node name="Camera2D" type="Camera2D" parent="."]
-zoom = Vector2(3, 3)
+zoom = Vector2(2, 2)

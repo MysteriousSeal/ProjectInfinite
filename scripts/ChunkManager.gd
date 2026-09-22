@@ -3,6 +3,14 @@ extends Node2D
 const CHUNK_SIZE := 16
 const TILE_PX := 16
 const LOAD_RADIUS := 2
+const WORLD_COLLISION_LAYER := 1
+
+const GRASS_TILE := 0
+const WATER_TILE := 1
+const SAND_TILE := 2
+
+# Keeps the player's spawn area walkable so a random seed can't trap them in water.
+const SPAWN_CLEARANCE := 2
 
 @onready var tilemap: TileMap = $TileMap
 
@@ -27,8 +35,19 @@ func _build_tileset() -> void:
 		atlas.create_tile(Vector2i(i, 0))
 	var tileset := TileSet.new()
 	tileset.tile_size = Vector2i(TILE_PX, TILE_PX)
+	tileset.add_physics_layer()
+	tileset.set_physics_layer_collision_layer(0, WORLD_COLLISION_LAYER)
 	tileset.add_source(atlas, 0)
+	_make_tile_solid(atlas, WATER_TILE)
 	tilemap.tile_set = tileset
+
+func _make_tile_solid(atlas: TileSetAtlasSource, tile_id: int) -> void:
+	var half := TILE_PX / 2.0
+	var tile_data := atlas.get_tile_data(Vector2i(tile_id, 0), 0)
+	tile_data.add_collision_polygon(0)
+	tile_data.set_collision_polygon_points(0, 0, PackedVector2Array([
+		Vector2(-half, -half), Vector2(half, -half), Vector2(half, half), Vector2(-half, half)
+	]))
 
 func follow(target: Node2D) -> void:
 	player = target
@@ -58,11 +77,13 @@ func _generate_chunk(chunk: Vector2i) -> void:
 			var wx := chunk.x * CHUNK_SIZE + lx
 			var wy := chunk.y * CHUNK_SIZE + ly
 			var n := noise.get_noise_2d(wx, wy)
-			var tile_id := 0
+			var tile_id := GRASS_TILE
 			if n < -0.3:
-				tile_id = 1
+				tile_id = WATER_TILE
 			elif n < -0.15:
-				tile_id = 2
+				tile_id = SAND_TILE
+			if absi(wx) <= SPAWN_CLEARANCE and absi(wy) <= SPAWN_CLEARANCE:
+				tile_id = GRASS_TILE
 			tilemap.set_cell(0, Vector2i(wx, wy), 0, Vector2i(tile_id, 0))
 	loaded_chunks[chunk] = true
 
