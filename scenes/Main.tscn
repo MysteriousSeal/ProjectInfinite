@@ -27,58 +27,6 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 mouse_filter = 2
 
-[node name="Level" type="Label" parent="Hud/Frame"]
-offset_left = 14.0
-offset_top = 8.0
-offset_right = 80.0
-offset_bottom = 22.0
-theme_override_colors/font_color = Color(0.96, 0.93, 0.78, 1)
-theme_override_colors/font_outline_color = Color(0.05, 0.06, 0.07, 1)
-theme_override_constants/outline_size = 2
-theme_override_font_sizes/font_size = 11
-text = "Lv 1"
-
-[node name="Gold" type="Label" parent="Hud/Frame"]
-offset_left = 96.0
-offset_top = 8.0
-offset_right = 158.0
-offset_bottom = 22.0
-theme_override_colors/font_color = Color(0.98, 0.84, 0.36, 1)
-theme_override_colors/font_outline_color = Color(0.05, 0.06, 0.07, 1)
-theme_override_constants/outline_size = 2
-theme_override_font_sizes/font_size = 11
-horizontal_alignment = 2
-text = "0 G"
-
-[node name="Health" type="Label" parent="Hud/Frame"]
-offset_left = 114.0
-offset_top = 23.0
-offset_right = 158.0
-offset_bottom = 35.0
-theme_override_colors/font_color = Color(0.93, 0.95, 0.93, 1)
-theme_override_colors/font_outline_color = Color(0.05, 0.06, 0.07, 1)
-theme_override_constants/outline_size = 2
-theme_override_font_sizes/font_size = 9
-horizontal_alignment = 2
-vertical_alignment = 1
-text = "0 / 0"
-
-[node name="Prompt" type="Label" parent="Hud"]
-visible = false
-anchors_preset = 7
-anchor_left = 0.5
-anchor_top = 1.0
-anchor_right = 0.5
-anchor_bottom = 1.0
-offset_left = -100.0
-offset_top = -42.0
-offset_right = 100.0
-offset_bottom = -18.0
-grow_horizontal = 2
-grow_vertical = 0
-horizontal_alignment = 1
-text = "Press E to open"
-
 [node name="CharacterSheet" type="CanvasLayer" parent="."]
 process_mode = 3
 script = ExtResource("4_sheet")
