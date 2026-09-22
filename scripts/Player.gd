@@ -15,8 +15,17 @@ const HEALTH_PER_ENDURANCE := 10
 const SPEED_PER_DEXTERITY := 4.0
 const COOLDOWN_PER_DEXTERITY := 0.01
 
+# The sprite stands two tiles tall while the body occupies one, so it is
+# lifted until the feet sit on the bottom edge of the collision box.
+const SPRITE_LIFT := -9
+const HERO_SOUTH := preload("res://assets/hero/hero_south.png")
+const HERO_NORTH := preload("res://assets/hero/hero_north.png")
+const HERO_EAST := preload("res://assets/hero/hero_east.png")
+const HERO_WEST := preload("res://assets/hero/hero_west.png")
+
 @onready var health: Health = $Health
 @onready var hitbox: Area2D = $Hitbox
+@onready var sprite: Sprite2D = $Sprite
 
 var facing := Vector2.DOWN
 var attacking := false
@@ -43,6 +52,8 @@ signal stats_changed
 
 func _ready() -> void:
 	add_to_group("player")
+	sprite.offset = Vector2(0, SPRITE_LIFT)
+	_face_sprite()
 	hitbox.monitoring = false
 	hitbox.body_entered.connect(_on_hitbox_body_entered)
 	health.died.connect(_on_died)
@@ -58,7 +69,7 @@ func _physics_process(delta: float) -> void:
 		if _poll_attack_pressed() and cooldown_timer <= 0.0:
 			_start_attack()
 	move_and_slide()
-	queue_redraw()
+	_face_sprite()
 
 func _handle_movement() -> void:
 	var dir := _get_input_dir()
@@ -167,6 +178,10 @@ func _on_died() -> void:
 	died.emit()
 	queue_free.call_deferred()
 
-func _draw() -> void:
-	draw_rect(Rect2(-6, -8, 12, 16), Color(0.2, 0.6, 1.0))
-	draw_line(Vector2.ZERO, facing * 10.0, Color(1, 1, 0), 2.0)
+# Movement is free 8-directional but the art is drawn for four, so a diagonal
+# resolves to whichever cardinal it leans towards.
+func _face_sprite() -> void:
+	if absf(facing.x) > absf(facing.y):
+		sprite.texture = HERO_EAST if facing.x > 0.0 else HERO_WEST
+	else:
+		sprite.texture = HERO_SOUTH if facing.y > 0.0 else HERO_NORTH
