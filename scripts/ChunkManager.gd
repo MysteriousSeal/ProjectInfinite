@@ -47,6 +47,7 @@ const BOULDER_RARITY := 50
 const HOUSE_SCENE := preload("res://scenes/House.tscn")
 const HOUSE_TEXTURES := [
 	preload("res://assets/objects/house_1.png"),
+	preload("res://assets/objects/house_2.png"),
 ]
 const HOUSE_TILES := 2
 const HOUSE_PX := HOUSE_TILES * TILE_PX
