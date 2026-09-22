@@ -16,12 +16,9 @@ const SLOT := 34.0
 const SLOT_GAP := 7.0
 const GEAR_SLOT := 34.0
 
-# Shown faintly in the empty gear slots so each one reads as the kind of thing
-# it takes, rather than as an anonymous hole.
-const GEAR_HINTS := [
-	preload("res://assets/items/sword.png"),
-	preload("res://assets/items/leather.png"),
-]
+# Shown faintly in the empty weapon slot so it reads as the kind of thing it
+# takes. There is no armour art yet, so that slot carries its label alone.
+const WEAPON_HINT := preload("res://assets/items/sword_iron.png")
 const GEAR_LABELS := ["WEAPON", "ARMOUR"]
 
 @onready var sheet: Control = $Sheet
@@ -160,11 +157,12 @@ func _draw_right() -> void:
 	UiTheme.text(sheet, Vector2(_right, top + 36.0), "EQUIPMENT", UiTheme.SIZE_HEAD,
 		UiTheme.ACCENT)
 	UiTheme.rule(sheet, _right, _edge, top + 48.0)
-	for i in GEAR_HINTS.size():
+	for i in GEAR_LABELS.size():
 		var at := Vector2(_right + i * (GEAR_SLOT + 16.0), top + 56.0)
 		UiTheme.slot(sheet, at, GEAR_SLOT)
-		sheet.draw_texture_rect(GEAR_HINTS[i], Rect2(at + Vector2(1.0, 1.0),
-			Vector2(GEAR_SLOT - 2.0, GEAR_SLOT - 2.0)), false, Color(1, 1, 1, 0.18))
+		if i == 0:
+			sheet.draw_texture_rect(WEAPON_HINT, Rect2(at + Vector2(1.0, 1.0),
+				Vector2(GEAR_SLOT - 2.0, GEAR_SLOT - 2.0)), false, Color(1, 1, 1, 0.18))
 		UiTheme.text(sheet, Vector2(at.x, at.y + GEAR_SLOT + 6.0), GEAR_LABELS[i],
 			UiTheme.SIZE_HEAD, UiTheme.DIM)
 

@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dodok6lvpckuw"
-path="res://.godot/imported/spear.png-5e8047af74f9aac411ecb26281730c39.ctex"
+uid="uid://sua2o8wvx4m7"
+path="res://.godot/imported/sword_obsidian.png-ef16138e0a60e2a5775e8e8736a703e0.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/items/spear.png"
-dest_files=["res://.godot/imported/spear.png-5e8047af74f9aac411ecb26281730c39.ctex"]
+source_file="res://assets/items/sword_obsidian.png"
+dest_files=["res://.godot/imported/sword_obsidian.png-ef16138e0a60e2a5775e8e8736a703e0.ctex"]
 
 [params]
 

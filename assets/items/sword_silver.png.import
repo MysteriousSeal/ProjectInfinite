@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bb1gavn8eaacu"
-path="res://.godot/imported/chain.png-0545398162061957ecece6e7edb05e51.ctex"
+uid="uid://g5oj5sqd1bdw"
+path="res://.godot/imported/sword_silver.png-0160802c8694cec61b0d24d17e400759.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/items/chain.png"
-dest_files=["res://.godot/imported/chain.png-0545398162061957ecece6e7edb05e51.ctex"]
+source_file="res://assets/items/sword_silver.png"
+dest_files=["res://.godot/imported/sword_silver.png-0160802c8694cec61b0d24d17e400759.ctex"]
 
 [params]
 

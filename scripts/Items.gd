@@ -3,13 +3,18 @@ extends RefCounted
 
 # The catalogue every item index refers to. Bags and pouches store indices
 # into this, so an item is a single int wherever it travels.
+# Every icon is 16x16, so the UI can upscale them all by the same whole factor
+# and keep the pixel grid of the rest of the art.
 const CATALOG := [
-	{"name": "SHORT SWORD", "icon": preload("res://assets/items/sword.png")},
-	{"name": "BATTLE AXE", "icon": preload("res://assets/items/axe.png")},
-	{"name": "WOODEN SPEAR", "icon": preload("res://assets/items/spear.png")},
-	{"name": "LEATHER VEST", "icon": preload("res://assets/items/leather.png")},
-	{"name": "CHAINMAIL", "icon": preload("res://assets/items/chain.png")},
-	{"name": "IRON PLATE", "icon": preload("res://assets/items/plate.png")},
+	{"name": "IRON SWORD", "icon": preload("res://assets/items/sword_iron.png")},
+	{"name": "STEEL SWORD", "icon": preload("res://assets/items/sword_steel.png")},
+	{"name": "SILVER SWORD", "icon": preload("res://assets/items/sword_silver.png")},
+	{"name": "JADE SWORD", "icon": preload("res://assets/items/sword_jade.png")},
+	{"name": "EMERALD SWORD", "icon": preload("res://assets/items/sword_emerald.png")},
+	{"name": "GILDED SWORD", "icon": preload("res://assets/items/sword_gilded.png")},
+	{"name": "SHADOW SWORD", "icon": preload("res://assets/items/sword_shadow.png")},
+	{"name": "OBSIDIAN SWORD", "icon": preload("res://assets/items/sword_obsidian.png")},
+	{"name": "BLACKSTEEL SWORD", "icon": preload("res://assets/items/sword_blacksteel.png")},
 ]
 
 static func count() -> int:
