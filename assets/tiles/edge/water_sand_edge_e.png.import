@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://n56m1dnw1kag"
-path="res://.godot/imported/forest_canopy.png-d49d6bcbcf5333176d9981db28b7aefd.ctex"
+uid="uid://dtkdsf3cti1hq"
+path="res://.godot/imported/water_sand_edge_e.png-8bda343bd26d71126261299f7b39486e.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/tilesets/forest_canopy.png"
-dest_files=["res://.godot/imported/forest_canopy.png-d49d6bcbcf5333176d9981db28b7aefd.ctex"]
+source_file="res://assets/tiles/edge/water_sand_edge_e.png"
+dest_files=["res://.godot/imported/water_sand_edge_e.png-8bda343bd26d71126261299f7b39486e.ctex"]
 
 [params]
 

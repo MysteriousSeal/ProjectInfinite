@@ -5,19 +5,33 @@ const TILE_PX := 16
 const LOAD_RADIUS := 2
 const WORLD_COLLISION_LAYER := 1
 
-const GRASS_TILE := 0
-const WATER_TILE := 1
-const SAND_TILE := 2
-const TREE_TILE := 3
+# Terrain is ordered low to high, which is also the atlas strip order.
+const WATER := 0
+const SAND := 1
+const GRASS := 2
+const CANOPY := 3
 
-const GRASS_COLOR := Color(0.19, 0.56, 0.24)
-const WATER_COLOR := Color(0.16, 0.45, 0.85)
-const SAND_COLOR := Color(0.75, 0.68, 0.45)
+# Each terrain is one independent tile, so the atlas is a single strip and a
+# cell is painted from the terrain at its centre. Boundaries land on grid
+# lines, which is how the handheld games this is styled after draw them.
+#
+# Each terrain ships interchangeable variants that share one base colour.
+# Picking between them per cell is what stops a single tile from visibly
+# repeating across the large areas each terrain covers. Indexed by terrain.
+const TERRAIN_NAMES := ["water", "sand", "grass", "tree"]
+const TERRAIN_VARIANTS := [16, 9, 16, 12]
+const TILE_PATH := "res://assets/tiles/%s/%s_%02d.png"
 
-# Wang tileset from PixelLab. Only the all-canopy tile is used for now; the
-# other 15 are edge and corner pieces kept for when forests get autotiled.
-const CANOPY_SHEET := preload("res://assets/tilesets/forest_canopy.png")
-const CANOPY_SHEET_RECT := Rect2i(0, 48, 16, 16)
+# Edge tiles let a terrain intrude into the one below it with a shaped border
+# instead of stopping on a grid line. Pair index is the lower terrain, so pair
+# 0 is water bordered by sand and pair 1 is sand bordered by grass.
+const EDGE_PAIRS := [["water", "sand"], ["sand", "grass"]]
+const EDGE_KINDS := [
+	"edge_n", "edge_e", "edge_s", "edge_w",
+	"corner_ne", "corner_se", "corner_sw", "corner_nw",
+	"wrap_ne", "wrap_se", "wrap_sw", "wrap_nw",
+]
+const EDGE_PATH := "res://assets/tiles/edge/%s_%s_%s.png"
 
 # Forests are broad noise masses; a second, finer noise punches clearings
 # through them so a forest never becomes an impassable wall of trees.
@@ -41,6 +55,9 @@ const SPAWN_CLEARANCE := 2
 var player: Node2D
 var loaded_chunks: Dictionary = {}
 var lakes: Dictionary = {}
+var atlas_offsets: Array[int] = []
+var atlas_count := 0
+var edge_offset := 0
 var noise := FastNoiseLite.new()
 var forest_noise := FastNoiseLite.new()
 var clearing_noise := FastNoiseLite.new()
@@ -57,26 +74,49 @@ func _ready() -> void:
 	_build_tileset()
 
 func _build_tileset() -> void:
-	var colors := [GRASS_COLOR, WATER_COLOR, SAND_COLOR, GRASS_COLOR]
-	var img := Image.create_empty(TILE_PX * colors.size(), TILE_PX, false, Image.FORMAT_RGBA8)
-	for i in colors.size():
-		img.fill_rect(Rect2i(i * TILE_PX, 0, TILE_PX, TILE_PX), colors[i])
-	var canopy := CANOPY_SHEET.get_image()
-	canopy.convert(Image.FORMAT_RGBA8)
-	img.blit_rect(canopy, CANOPY_SHEET_RECT, Vector2i(TREE_TILE * TILE_PX, 0))
+	atlas_offsets.clear()
+	var total := 0
+	for terrain in TERRAIN_NAMES.size():
+		atlas_offsets.append(total)
+		total += TERRAIN_VARIANTS[terrain]
+	edge_offset = total
+	total += EDGE_PAIRS.size() * EDGE_KINDS.size()
+	atlas_count = total
+	var img := Image.create_empty(TILE_PX * atlas_count, TILE_PX, false, Image.FORMAT_RGBA8)
+	for terrain in TERRAIN_NAMES.size():
+		var name: String = TERRAIN_NAMES[terrain]
+		for variant in TERRAIN_VARIANTS[terrain]:
+			_blit_tile(img, load(TILE_PATH % [name, name, variant]), atlas_offsets[terrain] + variant)
+	for pair in EDGE_PAIRS.size():
+		var names: Array = EDGE_PAIRS[pair]
+		for kind in EDGE_KINDS.size():
+			_blit_tile(img, load(EDGE_PATH % [names[0], names[1], EDGE_KINDS[kind]]),
+				_edge_atlas(pair, kind))
 	var atlas := TileSetAtlasSource.new()
 	atlas.texture = ImageTexture.create_from_image(img)
 	atlas.texture_region_size = Vector2i(TILE_PX, TILE_PX)
-	for i in colors.size():
+	for i in atlas_count:
 		atlas.create_tile(Vector2i(i, 0))
 	var tileset := TileSet.new()
 	tileset.tile_size = Vector2i(TILE_PX, TILE_PX)
 	tileset.add_physics_layer()
 	tileset.set_physics_layer_collision_layer(0, WORLD_COLLISION_LAYER)
 	tileset.add_source(atlas, 0)
-	_make_tile_solid(atlas, WATER_TILE)
-	_make_tile_solid(atlas, TREE_TILE)
+	for terrain in [WATER, CANOPY]:
+		for variant in TERRAIN_VARIANTS[terrain]:
+			_make_tile_solid(atlas, atlas_offsets[terrain] + variant)
+	# A water cell keeps blocking even where sand intrudes into its border.
+	for kind in EDGE_KINDS.size():
+		_make_tile_solid(atlas, _edge_atlas(WATER, kind))
 	tilemap.tile_set = tileset
+
+func _edge_atlas(pair: int, kind: int) -> int:
+	return edge_offset + pair * EDGE_KINDS.size() + kind
+
+func _blit_tile(img: Image, texture: Texture2D, atlas_x: int) -> void:
+	var src := texture.get_image()
+	src.convert(Image.FORMAT_RGBA8)
+	img.blit_rect(src, Rect2i(0, 0, TILE_PX, TILE_PX), Vector2i(atlas_x * TILE_PX, 0))
 
 func _make_tile_solid(atlas: TileSetAtlasSource, tile_id: int) -> void:
 	var half := TILE_PX / 2.0
@@ -113,19 +153,58 @@ func _generate_chunk(chunk: Vector2i) -> void:
 		for lx in range(CHUNK_SIZE):
 			var wx := chunk.x * CHUNK_SIZE + lx
 			var wy := chunk.y * CHUNK_SIZE + ly
-			tilemap.set_cell(0, Vector2i(wx, wy), 0, Vector2i(_tile_at(wx, wy), 0))
+			tilemap.set_cell(0, Vector2i(wx, wy), 0, Vector2i(_atlas_tile(wx, wy), 0))
 	loaded_chunks[chunk] = true
 
-func _tile_at(wx: int, wy: int) -> int:
-	if _is_water(wx, wy):
-		return WATER_TILE
+# The variant is derived from the position so a chunk looks the same every
+# time it is streamed back in, rather than reshuffling on every visit.
+func _atlas_tile(wx: int, wy: int) -> int:
+	var terrain := _terrain_at(wx, wy)
+	if terrain < EDGE_PAIRS.size():
+		var kind := _edge_kind(wx, wy, terrain + 1)
+		if kind >= 0:
+			return _edge_atlas(terrain, kind)
+	var count: int = TERRAIN_VARIANTS[terrain]
+	if count == 1:
+		return atlas_offsets[terrain]
+	return atlas_offsets[terrain] + absi(hash(Vector3i(wx, wy, world_seed))) % count
+
+# Which border piece a cell needs, from the sides the terrain above touches.
+# Returns -1 when no single piece fits, which falls back to a plain fill.
+func _edge_kind(wx: int, wy: int, upper: int) -> int:
+	var n := _terrain_at(wx, wy - 1) >= upper
+	var e := _terrain_at(wx + 1, wy) >= upper
+	var s := _terrain_at(wx, wy + 1) >= upper
+	var w := _terrain_at(wx - 1, wy) >= upper
+	match int(n) + int(e) + int(s) + int(w):
+		1:
+			if n: return 0
+			if e: return 1
+			if s: return 2
+			return 3
+		2:
+			if n and e: return 8
+			if s and e: return 9
+			if s and w: return 10
+			if n and w: return 11
+			return -1
+		0:
+			if _terrain_at(wx + 1, wy - 1) >= upper: return 4
+			if _terrain_at(wx + 1, wy + 1) >= upper: return 5
+			if _terrain_at(wx - 1, wy + 1) >= upper: return 6
+			if _terrain_at(wx - 1, wy - 1) >= upper: return 7
+	return -1
+
+func _terrain_at(vx: int, vy: int) -> int:
+	if _is_water(vx, vy):
+		return WATER
 	for oy in range(-1, 2):
 		for ox in range(-1, 2):
-			if _is_water(wx + ox, wy + oy):
-				return SAND_TILE
-	if _is_forest(wx, wy):
-		return TREE_TILE
-	return GRASS_TILE
+			if _is_water(vx + ox, vy + oy):
+				return SAND
+	if _is_forest(vx, vy):
+		return CANOPY
+	return GRASS
 
 # A lone tree in open grass reads as debris rather than woodland, so a tile
 # only keeps its tree if it has at least one orthogonal neighbour tree.
